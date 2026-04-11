@@ -11,12 +11,14 @@ import {
   Zap, 
   Building2, 
   History,
-  Info
+  Info,
+  Globe
 } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { ShredderViz } from '@/components/dashboard/shredder-viz';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { JurisdictionSelector, JURISDICTIONS } from '@/components/dashboard/jurisdiction-selector';
 import { useAccount, useReadContract, useReadContracts, useWriteContract, useWatchContractEvent } from 'wagmi';
 import { CONTRACTS } from '@/contracts';
 import { formatUnits, parseUnits } from 'viem';
@@ -42,6 +44,8 @@ export default function DashboardPage() {
   const [newWorker, setNewWorker] = useState('');
   const [newAmount, setNewAmount] = useState('');
   const [newTax, setNewTax] = useState('1000'); // Default 10%
+  const [selectedJurisId, setSelectedJurisId] = useState('hk');
+  const [customTaxAddr, setCustomTaxAddr] = useState('');
 
   // 1. Fetch my milestone IDs
   const { data: milestoneIds, refetch: refetchIds } = useReadContract({
@@ -88,7 +92,8 @@ export default function DashboardPage() {
           amount: milestone[0],
           taxBP: milestone[3],
           isReleased: milestone[4],
-          yield: interest || 0n
+          yield: interest || 0n,
+          taxRecipient: milestone[7]
         });
       }
     }
@@ -131,12 +136,20 @@ export default function DashboardPage() {
     e.preventDefault();
     if (!newWorker || !newAmount) return;
     
-    try {
+        const taxRecipient = selectedJurisId === 'custom' 
+            ? customTaxAddr 
+            : JURISDICTIONS.find(j => j.id === selectedJurisId)?.address;
+
+        if (!taxRecipient || taxRecipient === '0x0000000000000000000000000000000000000000') {
+            toast.error("Invalid Authority", { description: "You must select a valid tax jurisdiction." });
+            return;
+        }
+
         const hash = await createEscrow({
             address: CONTRACTS.HashFlowEscrow.address,
             abi: CONTRACTS.HashFlowEscrow.abi,
             functionName: 'createEscrow',
-            args: [newWorker as `0x${string}`, parseUnits(newAmount, 6), Number(newTax)]
+            args: [newWorker as `0x${string}`, taxRecipient as `0x${string}`, parseUnits(newAmount, 6), Number(newTax)]
         });
         toast.success("Escrow Initiated", { description: `TX: ${hash.slice(0, 10)}...` });
         setNewWorker('');
@@ -249,7 +262,7 @@ export default function DashboardPage() {
                   <th className="px-6 py-3">ID</th>
                   <th className="px-6 py-3">Worker (ZK)</th>
                   <th className="px-6 py-3">Escrow Principal</th>
-                  <th className="px-6 py-3">Yield Accrued</th>
+                  <th className="px-6 py-3">Tax Destination</th>
                   <th className="px-6 py-3 text-right">Action</th>
                 </tr>
               </thead>
@@ -266,7 +279,12 @@ export default function DashboardPage() {
                     <td className="px-6 py-4 font-mono text-xs text-slate-500">#{flow.id}</td>
                     <td className="px-6 py-4 font-mono text-xs text-primary font-medium">{flow.worker.slice(0,6)}...{flow.worker.slice(-4)}</td>
                     <td className="px-6 py-4 font-bold">{formatUnits(flow.amount, 6)} HSP</td>
-                    <td className="px-6 py-4 text-accent font-medium tabular-nums">{formatUnits(flow.yield, 6)}</td>
+                    <td className="px-6 py-4">
+                        <div className="flex items-center gap-1.5 font-mono text-[10px] text-slate-500 bg-slate-100 px-2 py-1 rounded w-fit">
+                            <Globe className="w-3 h-3 text-primary/50" />
+                            {flow.taxRecipient?.slice(0,6)}...{flow.taxRecipient?.slice(-4)}
+                        </div>
+                    </td>
                     <td className="px-6 py-4 text-right">
                       <button 
                         onClick={() => handleRelease(flow.id)}
@@ -308,6 +326,14 @@ export default function DashboardPage() {
                         onChange={(e) => setNewWorker(e.target.value)}
                     />
                 </div>
+                
+                <JurisdictionSelector 
+                    selectedId={selectedJurisId}
+                    customAddress={customTaxAddr}
+                    onSelect={setSelectedJurisId}
+                    onCustomAddressChange={setCustomTaxAddr}
+                />
+
                 <div className="space-y-1">
                     <label className="text-[10px] font-bold text-slate-400 uppercase">Amount (HSP)</label>
                     <input 

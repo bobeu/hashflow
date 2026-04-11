@@ -8,6 +8,7 @@ interface IHashFlowEscrow {
     function receiveHSPPayment(
         address _client,
         address _worker,
+        address _taxRecipient,
         uint256 _amount,
         uint16  _taxRateBP
     ) external returns (uint256 milestoneId);
@@ -83,6 +84,7 @@ contract MockHSP {
     function triggerPayment(
         address _client,
         address _worker,
+        address _taxRecipient,
         uint256 _amount,
         uint16  _taxRateBP
     ) external returns (uint256 milestoneId) {
@@ -93,7 +95,7 @@ contract MockHSP {
         token.forceApprove(address(escrow), _amount);
 
         // Forward payment through HSP callback.
-        milestoneId = escrow.receiveHSPPayment(_client, _worker, _amount, _taxRateBP);
+        milestoneId = escrow.receiveHSPPayment(_client, _worker, _taxRecipient, _amount, _taxRateBP);
 
         emit HSPPaymentTriggered(milestoneId, _client, _worker, _amount);
     }

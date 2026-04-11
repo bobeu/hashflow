@@ -48,6 +48,7 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
         bool    isReleased;
         uint256 startTime;
         uint256 shares;
+        address taxRecipient;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -143,7 +144,7 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
     /**
      * @notice Emitted when tax is remitted to the government vault.
      */
-    event TaxRemitted(uint256 indexed milestoneId, uint256 amount, address vault);
+    event TaxRemitted(uint256 indexed milestoneId, uint256 amount, address indexed taxRecipient);
 
     /**
      * @notice Emitted when platform yield fee is collected.
@@ -256,10 +257,12 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
      */
     function createEscrow(
         address _worker,
+        address _taxRecipient,
         uint256 _amount,
         uint16  _taxRateBP
     ) external nonReentrant returns (uint256 milestoneId) {
         if (_worker   == address(0)) revert ZeroAddress();
+        if (_taxRecipient == address(0)) revert ZeroAddress();
         if (_amount   == 0)          revert ZeroAmount();
         if (_taxRateBP >= BP_DENOMINATOR) revert TaxRateTooHigh();
 
@@ -275,13 +278,14 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
         uint256 shares = vault.deposit(_amount, address(this));
 
         milestones[milestoneId] = Milestone({
-            amount:     _amount,
-            client:     msg.sender,
-            worker:     _worker,
-            taxRateBP:  _taxRateBP,
-            isReleased: false,
-            startTime:  block.timestamp,
-            shares:     shares
+            amount:       _amount,
+            client:       msg.sender,
+            worker:       _worker,
+            taxRateBP:    _taxRateBP,
+            isReleased:   false,
+            startTime:    block.timestamp,
+            shares:       shares,
+            taxRecipient: _taxRecipient
         });
 
         clientMilestones[msg.sender].push(milestoneId);
@@ -333,11 +337,13 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
     function receiveHSPPayment(
         address _client,
         address _worker,
+        address _taxRecipient,
         uint256 _amount,
         uint16  _taxRateBP
     ) external onlyHSP nonReentrant returns (uint256 milestoneId) {
         if (_client   == address(0)) revert ZeroAddress();
         if (_worker   == address(0)) revert ZeroAddress();
+        if (_taxRecipient == address(0)) revert ZeroAddress();
         if (_amount   == 0)          revert ZeroAmount();
         if (_taxRateBP >= BP_DENOMINATOR) revert TaxRateTooHigh();
 
@@ -353,13 +359,14 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
         uint256 shares = vault.deposit(_amount, address(this));
 
         milestones[milestoneId] = Milestone({
-            amount:     _amount,
-            client:     _client,
-            worker:     _worker,
-            taxRateBP:  _taxRateBP,
-            isReleased: false,
-            startTime:  block.timestamp,
-            shares:     shares
+            amount:       _amount,
+            client:       _client,
+            worker:       _worker,
+            taxRateBP:    _taxRateBP,
+            isReleased:   false,
+            startTime:    block.timestamp,
+            shares:       shares,
+            taxRecipient: _taxRecipient
         });
 
         clientMilestones[_client].push(milestoneId);
@@ -503,9 +510,9 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
 
         // ── Distributions ────────────────────────────────────────────────────
         
-        // 1. Government: Sacrosanct 100% Tax remittance.
-        settlementToken.safeTransfer(regionalTaxVault, tax);
-        emit TaxRemitted(_milestoneId, tax, regionalTaxVault);
+        // 1. Government: Sacrosanct 100% Tax remittance to the milestone-specific recipient.
+        settlementToken.safeTransfer(m.taxRecipient, tax);
+        emit TaxRemitted(_milestoneId, tax, m.taxRecipient);
 
         // 2. Worker: net principal + share of yield.
         settlementToken.safeTransfer(m.worker, workerPayout + workerYield);
