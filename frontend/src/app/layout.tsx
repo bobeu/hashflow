@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { Suspense } from "react";
 import { Web3Provider } from "@/providers/web3-provider";
 import { Toaster } from "sonner";
 
@@ -30,7 +31,9 @@ export default function RootLayout({
         className={`${inter.variable} ${jetBrainsMono.variable} font-sans min-h-full bg-background antialiased`}
       >
         <Web3Provider>
-          {children}
+          <Suspense fallback={null}>
+            {children}
+          </Suspense>
           <Toaster position="top-right" richColors />
         </Web3Provider>
       </body>

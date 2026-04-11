@@ -1,66 +1,51 @@
-# HashFlow Protocol ⚡️
+# HashFlow Protocol ⚡
+**Global PayFi Engine | Yield-Collateralized Compliance | ZK-Identity Gated**
 
-**Institutional-Grade PayFi. Regulatory-Clean DeFi. Self-Sovereign Identity.**
+HashFlow is the premier settlement layer for the HashKey ecosystem. We transform stagnant escrow capital into productive, yield-bearing assets using a "Regulatory-Clean" architecture.
 
-HashFlow is the premier settlement engine for the HashKey ecosystem, transforming idle capital into active yields while maintaining absolute regulatory compliance and ZK-Identity verification.
-
-## 🏆 The Triple-Track Advantage
-
-HashFlow is uniquely designed to dominate three critical tracks:
+## 🚀 The Triple-Track Advantage
+HashFlow is engineered to dominate three core hackathon tracks:
 
 ### 1. PayFi (HashKey Settlement Protocol)
-By integrating directly as an institutional entry point for the **HashKey Settlement Protocol (HSP)**, HashFlow transforms static merchant payments into dynamic, yield-bearing assets. It ensures that every dollar in transition is productive, programmable, and compliant.
+By integrating as a specialized handler for the **HashKey Settlement Protocol (HSP)**, HashFlow allows institutions to bridge the gap between high-volume settlement and DeFi yield. It's the first "Smart Gateway" for HashKey merchants.
 
-### 2. DeFi (The EIP-4626 standard)
-Built on the **Shadow Spread** model, HashFlow leverages ERC-4626 vaults to generate real yield. It decouples platform revenue from settlement principal—meaning merchants pay 0% principal fees, while the protocol captures a portion of the "Shadow Spread" (DeFi interest).
+### 2. DeFi (ERC-4626 "Shadow Spread")
+We decouple protocol revenue from settlement principal.
+* **Merchants**: Pay 0% principal fees.
+* **Governments**: Receive 100% of jurisdictional tax.
+* **HashFlow**: Monetizes the **Shadow Spread** (a programmable % of the interest generated).
 
-### 3. ZKID (Compliance-First Identity)
-Every participant in the HashFlow economy is gated by **ZK-Identity**. Settlements only trigger when both parties are verified, ensuring institutional grade KYC/AML compliance at the smart contract level without compromising privacy.
-
----
-
-## 🏗️ Technical Architecture
-
-### **The "Shadow Spread" Revenue Model**
-Traditional protocols tax the user's principal. **HashFlow is Regulatory-Clean.**
-- **Tax (Sacrosanct)**: 100% of calculated tax is remitted directly to jurisdictional government vaults.
-- **Protocol Revenue**: HashFlow monetizes the **DeFi Efficiency** by taking a percentage of the *Interest (Yield)* generated during the settlement period.
-
-### **Self-Sovereign Indexing**
-Unlike protocols that rely on third-party indexers (Subgraphs/Goldsky), HashFlow implements **On-Chain Indexing** via `clientMilestones`. This ensures 100% data availability and "Merchant Data Sovereignty"—if the blockchain is up, the merchant's dashboard is functional.
+### 3. ZKID (Compliance-as-Code)
+Settlements are gated by **ZK-Identity verification**. This ensures institutional-grade KYC/AML compliance without exposing sensitive user data on-chain.
 
 ---
 
-## 🚀 Quick Start (Judge Guide)
+## 🏗️ Technical Breakthroughs
 
-### **1. Environment Setup**
+### **Multitenant Singleton Architecture**
+Unlike typical "One-Contract-Per-User" designs, HashFlow uses a high-performance **Singleton Model**.
+* **On-Chain Indexing**: We implement `clientMilestones` mapping directly in the contract.
+* **Data Sovereignty**: If the blockchain is up, the Merchant Dashboard is up. No reliance on third-party indexers or Subgraphs ensures 100% data availability for regulated entities.
+
+### **Jurisdictional Routing**
+HashFlow is globally compliant. Each milestone can define a unique `taxRecipient`. Whether you are remitting to the HK IRD or a custom UAE authority, the "Global Shredder" logic routes funds with 100% precision.
+
+---
+
+## ⚖️ Judge's Verification Guide
+
+### **Project Structure**
+* `/contracts/src`: The "Brain"—featuring `HashFlowEscrow.sol` with multi-jurisdictional logic.
+* `/frontend/src`: The "CFO Command Center"—a Next.js 16 dashboard featuring real-time yield tickers and ZK-status indicators.
+
+### **Execution**
 ```bash
+# 1. Initialize the environment
 ./init.sh
+
+# 2. Verify the Math (27+ Passing Tests)
+cd contracts && forge test --gas-report
+
+# 3. Launch the Merchant Hub
+cd frontend && npm run dev
 ```
-
-### **2. CFO Command Center (Frontend)**
-Launch the institutional dashboard to see real-time yield aggregation and on-chain indexing in action:
-```bash
-cd hashflow/frontend
-npm run dev
-```
-
-### **3. Smart Contract Verification**
-Run the comprehensive test suite (27 passing tests) to verify the Regulatory-Clean logic:
-```bash
-cd hashflow/contracts
-forge test --gas-report
-```
-
----
-
-## 💼 Merchant Operations Hub
-
-The HashFlow Dashboard features:
-- **Total Portfolio Yield**: Live ticker aggregating interest across all active flows.
-- **Tax Liability Forecast**: Real-time preview of pending government remitments.
-- **Institutional Escrow Form**: Unified interface for initiating compliant settlements.
-
----
-
-*Powered by HashKey & Antigravity.*
