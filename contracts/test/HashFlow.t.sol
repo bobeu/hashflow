@@ -6,6 +6,8 @@ import {HashFlowEscrow} from "../src/HashFlowEscrow.sol";
 import {MockVault}       from "../src/MockVault.sol";
 import {MockERC20}       from "../src/MockERC20.sol";
 import {MockHSP}         from "../src/MockHSP.sol";
+import {MockZKVerifier}  from "../src/MockZKVerifier.sol";
+import {IZKVerifier}    from "../src/interfaces/IZKVerifier.sol";
 
 /**
  * @title HashFlowTest
@@ -24,6 +26,8 @@ contract HashFlowTest is Test {
     address internal client   = makeAddr("client");
     address internal worker   = makeAddr("worker");
     address internal taxVault = makeAddr("taxVault");
+    address internal regionalVault = makeAddr("regionalVault");
+    address internal serviceVault  = makeAddr("serviceVault");
     address internal attacker = makeAddr("attacker");
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -34,6 +38,7 @@ contract HashFlowTest is Test {
     MockVault       internal vault;
     HashFlowEscrow  internal escrow;
     MockHSP         internal hsp;
+    MockZKVerifier  internal zk;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constants
@@ -69,8 +74,18 @@ contract HashFlowTest is Test {
 
         // Deploy mock HSP and register it with the escrow.
         hsp = new MockHSP(address(token), address(escrow));
-        vm.prank(owner);
+        
+        // Deploy ZK Verifier.
+        zk = new MockZKVerifier();
+
+        vm.startPrank(owner);
         escrow.setHSPAddress(address(hsp));
+        escrow.setZKVerifier(address(zk));
+        escrow.setTaxVaults(regionalVault, serviceVault);
+        vm.stopPrank();
+
+        // Verify worker by default to simplify standard tests.
+        zk.setVerificationStatus(worker, true);
 
         // Pre-mint tokens to test actors.
         token.mint(client,  10_000e6);
@@ -113,8 +128,9 @@ contract HashFlowTest is Test {
         escrow.releaseMilestone(id);
 
         // Assert distributions (no yield in this test — 1:1 share ratio).
-        assertEq(token.balanceOf(worker),   900e6, "Worker received 900");
-        assertEq(token.balanceOf(taxVault), 100e6, "TaxVault received 100");
+        assertEq(token.balanceOf(worker),        900e6, "Worker received 900");
+        assertEq(token.balanceOf(regionalVault),  80e6, "RegionalVault received 80");
+        assertEq(token.balanceOf(serviceVault),   20e6, "ServiceVault received 20");
         // Owner should receive no platform yield when totalAssets == principal.
         assertEq(token.balanceOf(owner), ownerBefore, "No yield, owner balance unchanged");
     }
@@ -292,22 +308,26 @@ contract HashFlowTest is Test {
         vm.stopPrank();
 
         uint256 workerBefore   = token.balanceOf(worker);
-        uint256 taxVaultBefore = token.balanceOf(taxVault);
+        uint256 regionalVaultBefore = token.balanceOf(regionalVault);
+        uint256 serviceVaultBefore  = token.balanceOf(serviceVault);
         uint256 ownerBefore    = token.balanceOf(owner);
 
         vm.prank(client);
         escrow.releaseMilestone(id);
 
-        uint256 workerGain    = token.balanceOf(worker)   - workerBefore;
-        uint256 taxGain       = token.balanceOf(taxVault) - taxVaultBefore;
-        uint256 platformGain  = token.balanceOf(owner)    - ownerBefore;
+        uint256 workerGain         = token.balanceOf(worker)        - workerBefore;
+        uint256 regionalTaxGain    = token.balanceOf(regionalVault) - regionalVaultBefore;
+        uint256 serviceFeeGain     = token.balanceOf(serviceVault)  - serviceVaultBefore;
+        uint256 platformGain       = token.balanceOf(owner)         - ownerBefore;
 
-        // Tax is computed on the exact principal — no floating point, so exact.
-        assertEq(taxGain, 5_000_000, "TaxVault: exact $5 tax");
+        // Total tax (5% of 100 = 5) split 80/20 -> 4 government, 1 platform service.
+        assertEq(regionalTaxGain, 4_000_000, "RegionalVault: $4 tax");
+        assertEq(serviceFeeGain,  1_000_000, "ServiceVault: $1 service fee");
+
         // Worker: $95 principal payout + ~$2.5 yield share ≈ $97.5 (1 wei tol.).
         assertApproxEqAbs(workerGain,  97_500_000, 1, "Worker: 95 + ~2.5");
         // Platform: ~$2.5 yield share (1 wei tolerance).
-        assertApproxEqAbs(platformGain, 2_500_000, 1, "Platform: ~2.5");
+        assertApproxEqAbs(platformGain, 2_500_000, 1, "Platform owner: ~2.5");
     }
 
     /**
@@ -444,5 +464,100 @@ contract HashFlowTest is Test {
         escrow.releaseMilestone(id);
         uint256 gasUsed = gasBefore - gasleft();
         console2.log("releaseMilestone gas:", gasUsed);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ── Phase 4: ZK-Compliance Gate Tests ────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * @notice Escrow creation must revert if the worker is not ZK-verified.
+     */
+    function test_Phase4_RevertIf_WorkerNotVerified() public {
+        address unverifiedWorker = makeAddr("unverified");
+        // No need to set anything in zk mock, it's false by default.
+
+        vm.startPrank(client);
+        token.approve(address(escrow), ONE_THOUSAND);
+        vm.expectRevert(HashFlowEscrow.NotVerified.selector);
+        escrow.createEscrow(unverifiedWorker, ONE_THOUSAND, TAX_10PCT);
+        vm.stopPrank();
+    }
+
+    /**
+     * @notice Verified workers can successfully have escrows created for them.
+     */
+    function test_Phase4_VerifiedWorkerSuccess() public {
+        address verifiedWorker = makeAddr("verified");
+        zk.setVerificationStatus(verifiedWorker, true);
+
+        vm.startPrank(client);
+        token.approve(address(escrow), ONE_THOUSAND);
+        uint256 id = escrow.createEscrow(verifiedWorker, ONE_THOUSAND, TAX_10PCT);
+        vm.stopPrank();
+
+        (, , address mWorker, , , , ) = escrow.milestones(id);
+        assertEq(mWorker, verifiedWorker, "Escrow created for verified worker");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ── Phase 5: Multi-Jurisdictional Tax Tests ─────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * @notice $1 000 deposit at 10 % tax ($100 tax) → $80 to Gov, $20 to Service.
+     */
+    function test_Phase5_TaxShreddingSplit() public {
+        uint256 id = _createEscrow(ONE_THOUSAND, TAX_10PCT);
+
+        // Expect FundsShredded(id, 100e6, 80e6, 20e6)
+        vm.expectEmit(true, true, true, true, address(escrow));
+        emit HashFlowEscrow.FundsShredded(id, 100e6, 80e6, 20e6);
+
+        vm.prank(client);
+        escrow.releaseMilestone(id);
+
+        assertEq(token.balanceOf(regionalVault), 80e6, "80% to Government");
+        assertEq(token.balanceOf(serviceVault),  20e6, "20% to Service Fee");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ── Phase 6: Merchant Analytics View Tests ──────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * @notice Pending yield should reflect (totalAssets - principal).
+     */
+    function test_Phase6_GetPendingYield() public {
+        uint256 id = _createEscrow(ONE_HUNDRED, 0);
+
+        // Inject 5e6 yield.
+        vm.startPrank(owner);
+        token.approve(address(vault), FIVE);
+        vault.simulateYield(FIVE);
+        vm.stopPrank();
+
+        uint256 pending = escrow.getPendingYield(id);
+        // Recall OZ virtual offset: 5e6 becomes 4_999_999.
+        assertApproxEqAbs(pending, 5e6, 1, "Pending yield approx 5e6");
+    }
+
+    /**
+     * @notice Aggregates tax liability across multiple active escrows.
+     */
+    function test_Phase6_TotalTaxLiability() public {
+        // Milestone 0: 1000 @ 10% = 100 liability.
+        _createEscrow(ONE_THOUSAND, TAX_10PCT);
+        // Milestone 1: 100 @ 5% = 5 liability.
+        _createEscrow(ONE_HUNDRED, TAX_5PCT);
+
+        uint256 liability = escrow.getTotalTaxLiability(client);
+        assertEq(liability, 100e6 + 5e6, "Total liability is 105");
+
+        // Release one milestone -> liability should decrease.
+        vm.prank(client);
+        escrow.releaseMilestone(0);
+
+        assertEq(escrow.getTotalTaxLiability(client), 5e6, "Liability after release");
     }
 }

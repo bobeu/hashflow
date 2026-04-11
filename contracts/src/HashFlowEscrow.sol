@@ -6,6 +6,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {IZKVerifier} from "./interfaces/IZKVerifier.sol";
 
 /**
  * @title HashFlowEscrow
@@ -67,7 +68,13 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
     IERC4626 public immutable vault;
 
     /// @notice Recipient of the tax portion on each milestone release.
-    address public immutable taxVault;
+    address public taxVault;
+
+    /// @notice Recipient of the 80% government portion of the tax.
+    address public regionalTaxVault;
+
+    /// @notice Recipient of the 20% platform service portion of the tax.
+    address public autoServiceFeeVault;
 
     // ─────────────────────────────────────────────────────────────────────────
     // State
@@ -81,6 +88,9 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
 
     /// @notice Address authorised to call {receiveHSPPayment} (HashKey Settlement Protocol).
     address public hspAddress;
+
+    /// @notice Address of the ZK-Identity registry for worker verification.
+    address public zkVerifier;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Events
@@ -109,7 +119,7 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
      * @param milestoneId      The milestone that was released.
      * @param worker           Recipient of the worker payout.
      * @param workerPayout     Principal amount transferred to the worker (after tax).
-     * @param taxAmount        Tax amount transferred to the taxVault.
+     * @param taxAmount        Total tax amount collected.
      * @param workerYield      Yield portion transferred to the worker (50 % of excess).
      * @param platformYield    Yield portion transferred to the platform owner (50 % of excess).
      * @param totalYield       Total yield earned (workerYield + platformYield).
@@ -123,6 +133,32 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
         uint256 platformYield,
         uint256 totalYield
     );
+
+    /**
+     * @notice Emitted when tax is split between multi-jurisdictional stakeholders.
+     * @param milestoneId  The milestone providing the tax.
+     * @param totalTax     Total tax amount collected.
+     * @param govCut       Portion sent to RegionalTaxVault (80 %).
+     * @param platformCut  Portion sent to AutoServiceFee (20 %).
+     */
+    event FundsShredded(
+        uint256 indexed milestoneId,
+        uint256 totalTax,
+        uint256 govCut,
+        uint256 platformCut
+    );
+
+    /**
+     * @notice Emitted when a vault address is updated.
+     */
+    event TaxVaultsUpdated(address regionalTaxVault, address autoServiceFeeVault);
+
+    /**
+     * @notice Emitted when the ZK Verifier address is updated.
+     * @param oldVerifier Previous verifier.
+     * @param newVerifier New verifier.
+     */
+    event ZKVerifierUpdated(address indexed oldVerifier, address indexed newVerifier);
 
     /**
      * @notice Emitted when the HSP authorised address is updated.
@@ -155,6 +191,9 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
 
     /// @notice Reverts when tax rate would exceed or equal 100 %.
     error TaxRateTooHigh();
+
+    /// @notice Reverts when the worker is not verified via ZK-Identity.
+    error NotVerified();
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constructor
@@ -221,6 +260,8 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
         if (_worker   == address(0)) revert ZeroAddress();
         if (_amount   == 0)          revert ZeroAmount();
         if (_taxRateBP >= BP_DENOMINATOR) revert TaxRateTooHigh();
+
+        _checkVerification(_worker);
 
         milestoneId = milestoneCount++;
 
@@ -290,6 +331,8 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
         if (_amount   == 0)          revert ZeroAmount();
         if (_taxRateBP >= BP_DENOMINATOR) revert TaxRateTooHigh();
 
+        _checkVerification(_worker);
+
         milestoneId = milestoneCount++;
 
         // Pull tokens from the HSP contract (which acts as the client proxy).
@@ -327,6 +370,27 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
         hspAddress = _newHsp;
     }
 
+    /**
+     * @notice Updates the ZK-Identity verifier address.
+     * @param _newVerifier The new verifier address.
+     */
+    function setZKVerifier(address _newVerifier) external onlyOwner {
+        emit ZKVerifierUpdated(zkVerifier, _newVerifier);
+        zkVerifier = _newVerifier;
+    }
+
+    /**
+     * @notice Updates the tax distribution vaults.
+     * @param _regionalTaxVault    New government tax vault.
+     * @param _autoServiceFeeVault New platform service fee vault.
+     */
+    function setTaxVaults(address _regionalTaxVault, address _autoServiceFeeVault) external onlyOwner {
+        if (_regionalTaxVault == address(0) || _autoServiceFeeVault == address(0)) revert ZeroAddress();
+        regionalTaxVault    = _regionalTaxVault;
+        autoServiceFeeVault = _autoServiceFeeVault;
+        emit TaxVaultsUpdated(_regionalTaxVault, _autoServiceFeeVault);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Public — View Helpers
     // ─────────────────────────────────────────────────────────────────────────
@@ -340,6 +404,33 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
         if (_milestoneId >= milestoneCount) revert InvalidMilestoneId();
         Milestone storage m = milestones[_milestoneId];
         assets = vault.convertToAssets(m.shares);
+    }
+
+    /**
+     * @notice Returns the current unrealized yield for an active escrow.
+     * @param _milestoneId Milestone to query.
+     * @return yield Current assets minus principal.
+     */
+    function getPendingYield(uint256 _milestoneId) external view returns (uint256 yield) {
+        if (_milestoneId >= milestoneCount) revert InvalidMilestoneId();
+        Milestone storage m = milestones[_milestoneId];
+        uint256 currentAssets = vault.convertToAssets(m.shares);
+        yield = currentAssets > m.amount ? currentAssets - m.amount : 0;
+    }
+
+    /**
+     * @notice Helper for Frontend: Aggregates total potential tax liability for a client.
+     * @dev    Iterates over all unreleased milestones. Primarily for off-chain view.
+     * @param _client The client address to query.
+     * @return totalLiability Total assets currently set aside as tax.
+     */
+    function getTotalTaxLiability(address _client) external view returns (uint256 totalLiability) {
+        for (uint256 i = 0; i < milestoneCount; i++) {
+            Milestone storage m = milestones[i];
+            if (m.client == _client && !m.isReleased) {
+                totalLiability += (m.amount * m.taxRateBP) / BP_DENOMINATOR;
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -381,8 +472,14 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
         // 1. Worker: principal minus tax.
         settlementToken.safeTransfer(m.worker, workerPayout);
 
-        // 2. Tax vault: tax portion of principal.
-        settlementToken.safeTransfer(taxVault, tax);
+        // 2. Tax distribution (multi-stakeholder shredding)
+        uint256 govCut = (tax * 80) / 100;
+        uint256 platformCut = tax - govCut;
+
+        settlementToken.safeTransfer(regionalTaxVault, govCut);
+        settlementToken.safeTransfer(autoServiceFeeVault, platformCut);
+
+        emit FundsShredded(_milestoneId, tax, govCut, platformCut);
 
         // 3. Worker yield share (50 % of excess).
         if (workerYield > 0) {
@@ -403,5 +500,18 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
             platformYield,
             totalYield
         );
+    }
+
+    /**
+     * @dev Internal helper to verify worker ZK-Identity status.
+     *      If no zkVerifier is set (address 0), check is skipped.
+     * @param _worker Address to verify.
+     */
+    function _checkVerification(address _worker) internal view {
+        if (zkVerifier != address(0)) {
+            if (!IZKVerifier(zkVerifier).isVerified(_worker)) {
+                revert NotVerified();
+            }
+        }
     }
 }

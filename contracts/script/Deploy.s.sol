@@ -6,6 +6,7 @@ import {MockERC20}        from "../src/MockERC20.sol";
 import {MockVault}        from "../src/MockVault.sol";
 import {MockHSP}          from "../src/MockHSP.sol";
 import {HashFlowEscrow}   from "../src/HashFlowEscrow.sol";
+import {MockZKVerifier}   from "../src/MockZKVerifier.sol";
 
 /**
  * @title Deploy
@@ -50,6 +51,7 @@ contract Deploy is Script {
     MockVault      internal vault;
     HashFlowEscrow internal escrow;
     MockHSP        internal hsp;
+    MockZKVerifier internal zk;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Entry point
@@ -60,6 +62,9 @@ contract Deploy is Script {
         deployer      = vm.envOr("DEPLOYER_ADDRESS",  msg.sender);
         taxVault      = vm.envOr("TAX_VAULT_ADDRESS", msg.sender);
         platformOwner = vm.envOr("PLATFORM_ADDRESS",  msg.sender);
+
+        address regionalVault = vm.envOr("REGIONAL_TAX_VAULT_ADDRESS",  msg.sender);
+        address serviceVault  = vm.envOr("AUTO_SERVICE_FEE_VAULT_ADDRESS", msg.sender);
 
         console2.log("=== HashFlow Protocol Deployment ===");
         console2.log("Deployer     :", deployer);
@@ -93,10 +98,19 @@ contract Deploy is Script {
         console2.log("MockHSP deployed        :", address(hsp));
 
         // ── Step 5: Link HSP with the escrow ─────────────────────────────────
-        // This requires the broadcast signer to be the escrow's owner (platformOwner).
-        // On testnet the deployer and platformOwner should be the same address.
         escrow.setHSPAddress(address(hsp));
         console2.log("HSP registered          :", address(hsp));
+
+        // ── Step 6: Deploy & Link ZK Verifier ────────────────────────────────
+        zk = new MockZKVerifier();
+        escrow.setZKVerifier(address(zk));
+        console2.log("ZK Verifier deployed    :", address(zk));
+
+        // ── Step 7: Configure Tax Split ──────────────────────────────────────
+        escrow.setTaxVaults(regionalVault, serviceVault);
+        console2.log("Tax vaults configured   :");
+        console2.log("  Regional   :", regionalVault);
+        console2.log("  Service Fee:", serviceVault);
 
         vm.stopBroadcast();
 
@@ -107,6 +121,7 @@ contract Deploy is Script {
         console2.log("  VAULT_ADDRESS    =", address(vault));
         console2.log("  ESCROW_ADDRESS   =", address(escrow));
         console2.log("  HSP_ADDRESS      =", address(hsp));
+        console2.log("  ZK_VERIFIER_ADDR =", address(zk));
         console2.log("====================================");
     }
 }
