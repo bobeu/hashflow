@@ -22,9 +22,12 @@ import { CONTRACTS } from '@/contracts';
 
 // Mock data for initial "Full" UI demo
 const MOCK_FLOWS = [
-  { id: 1, client: "0x71C...4f32", worker: "0xf39...2266", amount: "1,200 HSP", status: "Locked", yield: "12.4 HSP" },
-  { id: 2, client: "0x92A...1191", worker: "0x709...af8b", amount: "5,000 HSP", status: "Released", yield: "45.0 HSP" },
-  { id: 3, client: "0x11B...9901", worker: "0xf39...2266", amount: "800 HSP", status: "Locked", yield: "2.1 HSP" },
+  { id: 1, client: "0x7aB...1192", worker: "0xf39...2266", amount: "12,500 HSP", status: "Locked", yield: "124.4 HSP" },
+  { id: 2, client: "0x92A...1191", worker: "0x709...af8b", amount: "55,000 HSP", status: "Released", yield: "945.0 HSP" },
+  { id: 3, client: "0x11B...9901", worker: "0xf39...2266", amount: "8,200 HSP", status: "Locked", yield: "82.1 HSP" },
+  { id: 4, client: "0xFE2...0041", worker: "0x3C4...9981", amount: "4,500 HSP", status: "Released", yield: "12.0 HSP" },
+  { id: 5, client: "0x88C...3371", worker: "0xf39...2266", amount: "1,200 HSP", status: "Locked", yield: "3.5 HSP" },
+  { id: 6, client: "0xBB9...a411", worker: "0x709...af8b", amount: "250 HSP", status: "Released", yield: "1.2 HSP" },
 ];
 
 export default function DashboardPage() {
@@ -32,7 +35,7 @@ export default function DashboardPage() {
   const [isVerified, setIsVerified] = useState(false);
   const [showShredder, setShowShredder] = useState(false);
   const [isLive, setIsLive] = useState(false);
-  const [yieldTicker, setYieldTicker] = useState(1245.88);
+  const [yieldTicker, setYieldTicker] = useState(12450.88);
 
   const { data: realYield } = useReadContract({
     address: CONTRACTS.HashFlowEscrow.address,
@@ -100,9 +103,9 @@ export default function DashboardPage() {
           <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <StatCard 
               title="Total Value Locked" 
-              value="$1.24M" 
+              value="$1.25M" 
               icon={Building2} 
-              description="+12.5% from last month"
+              description="+24.8% from last month"
             />
             <StatCard 
               title="Accrued Yield" 
@@ -114,7 +117,7 @@ export default function DashboardPage() {
             />
             <StatCard 
               title="Tax Liability" 
-              value="$42.1K" 
+              value="$250.4K" 
               icon={BarChart3} 
               description="Pending Shredder routing"
             />

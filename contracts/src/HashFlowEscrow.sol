@@ -309,16 +309,22 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * @notice Entry point for the HashKey Settlement Protocol to trigger escrow creation.
-     * @dev    This function mirrors {createEscrow} but is restricted to the registered
-     *         `hspAddress`. The HSP is expected to have pre-approved this contract to
-     *         spend `_amount` of `settlementToken` on behalf of the actual client.
+     * @notice Institutional Entry Point: Integration with HashKey Settlement Protocol (HSP).
+     * @dev    This function allows the HashKey Settlement Protocol to autonomously trigger
+     *         escrow creation for high-volume or regulated payment batches.
      *
-     * @param _client     Address of the client on whose behalf the escrow is created.
-     * @param _worker     Address of the worker.
-     * @param _amount     Principal amount to lock.
-     * @param _taxRateBP  Tax rate in basis points.
-     * @return milestoneId The ID assigned to the newly created milestone.
+     *         By routing HSP payments through HashFlow, merchants and banks transform
+     *         static settlement capital into dynamic, yield-bearing assets while
+     *         ensuring automated tax compliance (the 80/20 shredding logic).
+     *
+     *         The HSP caller is trusted to have captured the client's intent and
+     *         settlement tokens before invocation.
+     *
+     * @param _client     Address of the client (merchant/institution) on whose behalf the escrow is created.
+     * @param _worker     Address of the worker (contractor/entity) to be paid.
+     * @param _amount     Principal amount to lock and stake in ERC-4626.
+     * @param _taxRateBP  Specific tax rate for this jurisdictional settlement.
+     * @return milestoneId Unique tracking ID for the institutional settlement.
      */
     function receiveHSPPayment(
         address _client,
