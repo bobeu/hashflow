@@ -92,6 +92,12 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
     /// @notice Address of the ZK-Identity registry for worker verification.
     address public zkVerifier;
 
+    /// @notice Percentage of yield (interest) taken as platform fee (Basis Points).
+    uint16 public yieldFeeBP = 5000; // Default 50%
+
+    /// @notice On-chain indexing: Maps merchant addresses to their escrow IDs.
+    mapping(address => uint256[]) public clientMilestones;
+
     // ─────────────────────────────────────────────────────────────────────────
     // Events
     // ─────────────────────────────────────────────────────────────────────────
@@ -120,9 +126,9 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
      * @param worker           Recipient of the worker payout.
      * @param workerPayout     Principal amount transferred to the worker (after tax).
      * @param taxAmount        Total tax amount collected.
-     * @param workerYield      Yield portion transferred to the worker (50 % of excess).
-     * @param platformYield    Yield portion transferred to the platform owner (50 % of excess).
-     * @param totalYield       Total yield earned (workerYield + platformYield).
+     * @param workerYield      Yield portion transferred to the worker.
+     * @param platformYield    Yield portion transferred to the platform owner.
+     * @param totalYield       Total yield earned.
      */
     event MilestoneReleased(
         uint256 indexed milestoneId,
@@ -133,20 +139,16 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
         uint256 platformYield,
         uint256 totalYield
     );
+    
+    /**
+     * @notice Emitted when tax is remitted to the government vault.
+     */
+    event TaxRemitted(uint256 indexed milestoneId, uint256 amount, address vault);
 
     /**
-     * @notice Emitted when tax is split between multi-jurisdictional stakeholders.
-     * @param milestoneId  The milestone providing the tax.
-     * @param totalTax     Total tax amount collected.
-     * @param govCut       Portion sent to RegionalTaxVault (80 %).
-     * @param platformCut  Portion sent to AutoServiceFee (20 %).
+     * @notice Emitted when platform yield fee is collected.
      */
-    event FundsShredded(
-        uint256 indexed milestoneId,
-        uint256 totalTax,
-        uint256 govCut,
-        uint256 platformCut
-    );
+    event YieldFeeCollected(uint256 indexed milestoneId, uint256 amount);
 
     /**
      * @notice Emitted when a vault address is updated.
@@ -282,6 +284,8 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
             shares:     shares
         });
 
+        clientMilestones[msg.sender].push(milestoneId);
+
         emit EscrowCreated(milestoneId, msg.sender, _worker, _amount, _taxRateBP, shares);
     }
 
@@ -358,6 +362,8 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
             shares:     shares
         });
 
+        clientMilestones[_client].push(milestoneId);
+
         emit EscrowCreated(milestoneId, _client, _worker, _amount, _taxRateBP, shares);
     }
 
@@ -395,6 +401,15 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
         regionalTaxVault    = _regionalTaxVault;
         autoServiceFeeVault = _autoServiceFeeVault;
         emit TaxVaultsUpdated(_regionalTaxVault, _autoServiceFeeVault);
+    }
+
+    /**
+     * @notice Updates the platform fee for accrued yield.
+     * @param _newFee New fee in basis points (max 10 000).
+     */
+    function setYieldFee(uint16 _newFee) external onlyOwner {
+        if (_newFee > BP_DENOMINATOR) revert TaxRateTooHigh();
+        yieldFeeBP = _newFee;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -439,6 +454,13 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
         }
     }
 
+    /**
+     * @notice Returns all milestone IDs belonging to a specific client.
+     */
+    function getMyMilestones(address _client) external view returns (uint256[] memory) {
+        return clientMilestones[_client];
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Internal Helpers
     // ─────────────────────────────────────────────────────────────────────────
@@ -469,32 +491,29 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
         uint256 tax         = (principal * m.taxRateBP) / BP_DENOMINATOR;
         uint256 workerPayout = principal - tax;
 
-        // Excess yield is any value above the original principal.
+        // Excess yield calculations.
         uint256 totalYield   = totalAssets > principal ? totalAssets - principal : 0;
-        uint256 workerYield  = totalYield / 2;
-        uint256 platformYield = totalYield - workerYield; // Captures odd wei for platform.
+        uint256 platformYield = 0;
+        uint256 workerYield  = 0;
 
-        // ── Distributions ────────────────────────────────────────────────────
-        // 1. Worker: principal minus tax.
-        settlementToken.safeTransfer(m.worker, workerPayout);
-
-        // 2. Tax distribution (multi-stakeholder shredding)
-        uint256 govCut = (tax * 80) / 100;
-        uint256 platformCut = tax - govCut;
-
-        settlementToken.safeTransfer(regionalTaxVault, govCut);
-        settlementToken.safeTransfer(autoServiceFeeVault, platformCut);
-
-        emit FundsShredded(_milestoneId, tax, govCut, platformCut);
-
-        // 3. Worker yield share (50 % of excess).
-        if (workerYield > 0) {
-            settlementToken.safeTransfer(m.worker, workerYield);
+        if (totalYield > 0) {
+            platformYield = (totalYield * yieldFeeBP) / BP_DENOMINATOR;
+            workerYield   = totalYield - platformYield;
         }
 
-        // 4. Platform yield share (50 % of excess, rounded up on odd wei).
+        // ── Distributions ────────────────────────────────────────────────────
+        
+        // 1. Government: Sacrosanct 100% Tax remittance.
+        settlementToken.safeTransfer(regionalTaxVault, tax);
+        emit TaxRemitted(_milestoneId, tax, regionalTaxVault);
+
+        // 2. Worker: net principal + share of yield.
+        settlementToken.safeTransfer(m.worker, workerPayout + workerYield);
+
+        // 3. Platform: Service fee from yield only.
         if (platformYield > 0) {
-            settlementToken.safeTransfer(owner(), platformYield);
+            settlementToken.safeTransfer(autoServiceFeeVault, platformYield);
+            emit YieldFeeCollected(_milestoneId, platformYield);
         }
 
         emit MilestoneReleased(

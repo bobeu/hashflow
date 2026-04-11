@@ -17,8 +17,9 @@ import { StatCard } from '@/components/dashboard/stat-card';
 import { ShredderViz } from '@/components/dashboard/shredder-viz';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { useAccount, useReadContract, useWriteContract, useWatchContractEvent } from 'wagmi';
+import { useAccount, useReadContract, useReadContracts, useWriteContract, useWatchContractEvent } from 'wagmi';
 import { CONTRACTS } from '@/contracts';
+import { formatUnits, parseUnits } from 'viem';
 
 // Mock data for initial "Full" UI demo
 const MOCK_FLOWS = [
@@ -36,27 +37,130 @@ export default function DashboardPage() {
   const [showShredder, setShowShredder] = useState(false);
   const [isLive, setIsLive] = useState(false);
   const [yieldTicker, setYieldTicker] = useState(12450.88);
+  
+  // Form State
+  const [newWorker, setNewWorker] = useState('');
+  const [newAmount, setNewAmount] = useState('');
+  const [newTax, setNewTax] = useState('1000'); // Default 10%
 
-  const { data: realYield } = useReadContract({
+  // 1. Fetch my milestone IDs
+  const { data: milestoneIds, refetch: refetchIds } = useReadContract({
     address: CONTRACTS.HashFlowEscrow.address,
     abi: CONTRACTS.HashFlowEscrow.abi,
-    functionName: 'getPendingYield',
-    args: [BigInt(1)], // Mocking ID 1 for now
+    functionName: 'getMyMilestones',
+    args: [address as `0x${string}`],
     query: { enabled: !!address }
   });
 
-  const { writeContractAsync: releaseMilestone } = useWriteContract();
+  // 2. Batch fetch details for those IDs
+  const { data: multicallData, isLoading: isLoadingFlows } = useReadContracts({
+    contracts: (milestoneIds as bigint[] || []).flatMap(id => [
+      {
+        address: CONTRACTS.HashFlowEscrow.address,
+        abi: CONTRACTS.HashFlowEscrow.abi,
+        functionName: 'milestones',
+        args: [id]
+      },
+      {
+        address: CONTRACTS.HashFlowEscrow.address,
+        abi: CONTRACTS.HashFlowEscrow.abi,
+        functionName: 'getPendingYield',
+        args: [id]
+      }
+    ]),
+    query: { enabled: !!milestoneIds && milestoneIds.length > 0 }
+  });
 
-  // Live yield ticker effect
+  // 3. Process Multicall Data
+  const processedFlows = React.useMemo(() => {
+    if (!multicallData || !milestoneIds) return [];
+    
+    const flows = [];
+    for (let i = 0; i < milestoneIds.length; i++) {
+      const milestone = multicallData[i * 2]?.result as any;
+      const interest = multicallData[i * 2 + 1]?.result as bigint;
+      
+      if (milestone) {
+        flows.push({
+          id: Number(milestoneIds[i]),
+          client: milestone[1],
+          worker: milestone[2],
+          amount: milestone[0],
+          taxBP: milestone[3],
+          isReleased: milestone[4],
+          yield: interest || 0n
+        });
+      }
+    }
+    return flows.reverse(); // Newest first
+  }, [multicallData, milestoneIds]);
+
+  // 4. Aggregates
+  const stats = React.useMemo(() => {
+    const active = processedFlows.filter(f => !f.isReleased);
+    const tvl = active.reduce((acc, curr) => acc + curr.amount, 0n);
+    const yieldAcc = active.reduce((acc, curr) => acc + curr.yield, 0n);
+    const taxLiab = active.reduce((acc, curr) => acc + (curr.amount * BigInt(curr.taxBP) / 10000n), 0n);
+    
+    return {
+      tvl: formatUnits(tvl, 6),
+      yield: formatUnits(yieldAcc, 6),
+      tax: formatUnits(taxLiab, 6)
+    };
+  }, [processedFlows]);
+
+  const { writeContractAsync: releaseMilestone } = useWriteContract();
+  const { writeContractAsync: createEscrow } = useWriteContract();
+
+  // Update live yield ticker base
+  useEffect(() => {
+    if (stats.yield !== "0") {
+        setYieldTicker(parseFloat(stats.yield));
+    }
+  }, [stats.yield]);
+
+  // Live yield ticker animation effect
   useEffect(() => {
     const timer = setInterval(() => {
-      setYieldTicker(prev => prev + 0.0001);
+      setYieldTicker(prev => prev + 0.000001);
     }, 100);
     return () => clearInterval(timer);
   }, []);
 
+  const handleCreateEscrow = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newWorker || !newAmount) return;
+    
+    try {
+        const hash = await createEscrow({
+            address: CONTRACTS.HashFlowEscrow.address,
+            abi: CONTRACTS.HashFlowEscrow.abi,
+            functionName: 'createEscrow',
+            args: [newWorker as `0x${string}`, parseUnits(newAmount, 6), Number(newTax)]
+        });
+        toast.success("Escrow Initiated", { description: `TX: ${hash.slice(0, 10)}...` });
+        setNewWorker('');
+        setNewAmount('');
+        refetchIds();
+    } catch (err: any) {
+        toast.error("Creation Failed", { description: err.message });
+    }
+  };
+
   const handleRelease = async (id: number) => {
-    setShowShredder(true);
+    try {
+        await releaseMilestone({
+            address: CONTRACTS.HashFlowEscrow.address,
+            abi: CONTRACTS.HashFlowEscrow.abi,
+            functionName: 'releaseMilestone',
+            args: [BigInt(id)]
+        });
+        setShowShredder(true);
+        toast.success("Milestone Released", { description: "Funds shredded and routed." });
+        refetchIds();
+    } catch (err: any) {
+        toast.error("Release Failed", { description: err.message });
+    }
   };
 
   const handleSimulatePayment = () => {
@@ -102,24 +206,24 @@ export default function DashboardPage() {
           {/* Hero Stats */}
           <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <StatCard 
-              title="Total Value Locked" 
-              value="$1.25M" 
+              title="Merchant TVL" 
+              value={`$${stats.tvl}`} 
               icon={Building2} 
-              description="+24.8% from last month"
+              description="Current locked capital"
             />
             <StatCard 
-              title="Accrued Yield" 
-              value={yieldTicker.toFixed(4)} 
+              title="Portfolio Interest" 
+              value={yieldTicker.toFixed(6)} 
               icon={Coins} 
-              description="Live HSK accumulation"
+              description="Live aggregate growth"
               isTicker={true}
               className="border-accent/20 bg-accent/[0.02]"
             />
             <StatCard 
-              title="Tax Liability" 
-              value="$250.4K" 
+              title="Tax Forecast" 
+              value={`$${stats.tax}`} 
               icon={BarChart3} 
-              description="Pending Shredder routing"
+              description="Ready for regional remit"
             />
           </section>
 
@@ -142,30 +246,37 @@ export default function DashboardPage() {
               <table className="w-full text-left zebra-table min-w-[600px]">
                 <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-bold border-b border-slate-200">
                 <tr>
-                  <th className="px-6 py-3">Client</th>
+                  <th className="px-6 py-3">ID</th>
                   <th className="px-6 py-3">Worker (ZK)</th>
-                  <th className="px-6 py-3">Escrow Amount</th>
-                  <th className="px-6 py-3">Unrealized Yield</th>
+                  <th className="px-6 py-3">Escrow Principal</th>
+                  <th className="px-6 py-3">Yield Accrued</th>
                   <th className="px-6 py-3 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="text-sm divide-y divide-slate-100">
-                {MOCK_FLOWS.map((flow) => (
+                {processedFlows.length === 0 && !isLoadingFlows && (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-slate-400 font-mono text-xs">
+                      NO ACTIVE FLOWS FOUND FOR THIS MERCHANT
+                    </td>
+                  </tr>
+                )}
+                {processedFlows.map((flow) => (
                   <tr key={flow.id} className="group hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4 font-mono text-xs text-slate-500">{flow.client}</td>
-                    <td className="px-6 py-4 font-mono text-xs text-primary font-medium">{flow.worker}</td>
-                    <td className="px-6 py-4 font-bold">{flow.amount}</td>
-                    <td className="px-6 py-4 text-accent font-medium tabular-nums">{flow.yield}</td>
+                    <td className="px-6 py-4 font-mono text-xs text-slate-500">#{flow.id}</td>
+                    <td className="px-6 py-4 font-mono text-xs text-primary font-medium">{flow.worker.slice(0,6)}...{flow.worker.slice(-4)}</td>
+                    <td className="px-6 py-4 font-bold">{formatUnits(flow.amount, 6)} HSP</td>
+                    <td className="px-6 py-4 text-accent font-medium tabular-nums">{formatUnits(flow.yield, 6)}</td>
                     <td className="px-6 py-4 text-right">
                       <button 
                         onClick={() => handleRelease(flow.id)}
                         className={cn(
                         "px-4 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-2 ml-auto",
-                        flow.status === "Locked" 
+                        !flow.isReleased 
                           ? "bg-primary text-white shadow-sm hover:shadow-md" 
                           : "bg-slate-100 text-slate-400 cursor-not-allowed"
                       )}>
-                        {flow.status === "Locked" ? (
+                        {!flow.isReleased ? (
                           <>Release <ArrowUpRight className="w-3 h-3" /></>
                         ) : (
                           "Settled"
@@ -183,6 +294,39 @@ export default function DashboardPage() {
         {/* Right Section: Compliance & Actions */}
         <div className="lg:col-span-1 flex flex-col gap-8">
           
+          {/* Create Escrow Form */}
+          <section className="p-6 rounded-md border border-slate-200 bg-white shadow-sm">
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Institutional Settlement</h3>
+            <form onSubmit={handleCreateEscrow} className="space-y-4">
+                <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Worker Address</label>
+                    <input 
+                        type="text" 
+                        placeholder="0x..." 
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-xs font-mono"
+                        value={newWorker}
+                        onChange={(e) => setNewWorker(e.target.value)}
+                    />
+                </div>
+                <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Amount (HSP)</label>
+                    <input 
+                        type="number" 
+                        placeholder="100.00" 
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-xs font-mono"
+                        value={newAmount}
+                        onChange={(e) => setNewAmount(e.target.value)}
+                    />
+                </div>
+                <button 
+                    type="submit"
+                    className="w-full bg-primary text-white py-2 rounded-md text-xs font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+                >
+                    <Zap className="w-3 h-3" /> Initiate Escrow
+                </button>
+            </form>
+          </section>
+
           {/* Compliance Badge */}
           <section className="p-6 rounded-md border border-slate-200 bg-white shadow-sm">
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Compliance Status</h3>

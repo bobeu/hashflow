@@ -1,88 +1,66 @@
-# HashFlow Settlement Protocol (HSP)
-### Institutional PayFi | ERC-4626 Yield | ZK-Identity Compliance
+# HashFlow Protocol ⚡️
 
-**HashFlow** is a next-generation settlement engine built for the **HashKey Ecosystem**, transforming traditional escrow services into programmable, yield-bearing infrastructure. By integrating the **HashKey Settlement Protocol (HSP)** with **ERC-4626** yield vaults and **ZK-Identity**, HashFlow automates jurisdictional tax compliance and eliminates "Dead Capital" in global trade.
+**Institutional-Grade PayFi. Regulatory-Clean DeFi. Self-Sovereign Identity.**
 
----
+HashFlow is the premier settlement engine for the HashKey ecosystem, transforming idle capital into active yields while maintaining absolute regulatory compliance and ZK-Identity verification.
 
-## 🚀 The Value Proposition
+## 🏆 The Triple-Track Advantage
 
-*   **⚡ Programmable Settlement**: Direct integration with the HashKey Settlement Protocol (HSP) for autonomous, multi-milestone payouts.
-*   **🏦 Accrued Yield (ERC-4626)**: Idle settlement funds earn real-time yield in HashKey's native vaults, split between workers and the platform.
-*   **🛡️ Compliance-as-Code**: Automated jurisdictional tax "shredding" (80/20 split) powered by ZK-Identity verification.
-*   **📊 CFO Command Center**: A high-fidelity, institutional-grade dashboard for real-time monitoring of settlement flows and tax liabilities.
+HashFlow is uniquely designed to dominate three critical tracks:
 
----
+### 1. PayFi (HashKey Settlement Protocol)
+By integrating directly as an institutional entry point for the **HashKey Settlement Protocol (HSP)**, HashFlow transforms static merchant payments into dynamic, yield-bearing assets. It ensures that every dollar in transition is productive, programmable, and compliant.
 
-## 🛠️ Track Alignment
+### 2. DeFi (The EIP-4626 standard)
+Built on the **Shadow Spread** model, HashFlow leverages ERC-4626 vaults to generate real yield. It decouples platform revenue from settlement principal—meaning merchants pay 0% principal fees, while the protocol captures a portion of the "Shadow Spread" (DeFi interest).
 
-### 1. PayFi Track (HSP integration)
-HashFlow implements the `receiveHSPPayment` entry point, allowingregulated merchants and banks to route institutional turnovers directly into HashFlow's programmable engines. This turns static payments into dynamic settlement flows.
-
-### 2. DeFi Track (ERC-4626)
-Every dollar locked in HashFlow is immediately staked into **ERC-4626** compliant vaults. We maximize capital efficiency by ensuring that "Time-to-Settlement" is also "Time-to-Yield."
-
-### 3. ZKID Track (Verifiable Identity)
-The **ZK-Identity Compliance Gate** ensures that funds are only released to verified entities, satisfying the regulatory requirements of the HashKey Chain while preserving user privacy through zero-knowledge proofs.
+### 3. ZKID (Compliance-First Identity)
+Every participant in the HashFlow economy is gated by **ZK-Identity**. Settlements only trigger when both parties are verified, ensuring institutional grade KYC/AML compliance at the smart contract level without compromising privacy.
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Technical Architecture
 
-```mermaid
-graph TD
-    A[Client/HSP] -->|Deposit| B(HashFlowEscrow)
-    B -->|Stake| C[ERC-4626 Yield Vault]
-    C -->|Accrue| D(Yield)
-    E[Worker/ZKID] -->|Verify| B
-    B -->|Release| F[Worker Payout]
-    B -->|Release| G[80/20 Tax Shredder]
-    G -->|80%| H[Regional Tax Vault]
-    G -->|20%| I[Platform Fee]
-```
+### **The "Shadow Spread" Revenue Model**
+Traditional protocols tax the user's principal. **HashFlow is Regulatory-Clean.**
+- **Tax (Sacrosanct)**: 100% of calculated tax is remitted directly to jurisdictional government vaults.
+- **Protocol Revenue**: HashFlow monetizes the **DeFi Efficiency** by taking a percentage of the *Interest (Yield)* generated during the settlement period.
+
+### **Self-Sovereign Indexing**
+Unlike protocols that rely on third-party indexers (Subgraphs/Goldsky), HashFlow implements **On-Chain Indexing** via `clientMilestones`. This ensures 100% data availability and "Merchant Data Sovereignty"—if the blockchain is up, the merchant's dashboard is functional.
 
 ---
 
-## 🚦 Getting Started (Judge's Guide)
+## 🚀 Quick Start (Judge Guide)
 
-### One-Click Setup
-We've provided a simple initialization script to get the environment running locally:
-
+### **1. Environment Setup**
 ```bash
-# Clone and Initialize
 ./init.sh
 ```
 
-### Manual Installation
-1.  **Contracts**:
-    ```bash
-    cd contracts
-    forge install
-    forge build
-    ```
-2.  **Frontend**:
-    ```bash
-    cd frontend
-    npm install
-    npm run dev
-    ```
-
-### Artifact Sync Utility
-To propagate contract changes to the UI effortlessly:
+### **2. CFO Command Center (Frontend)**
+Launch the institutional dashboard to see real-time yield aggregation and on-chain indexing in action:
 ```bash
-cd contracts && node sync-artifacts.js
+cd hashflow/frontend
+npm run dev
+```
+
+### **3. Smart Contract Verification**
+Run the comprehensive test suite (27 passing tests) to verify the Regulatory-Clean logic:
+```bash
+cd hashflow/contracts
+forge test --gas-report
 ```
 
 ---
 
-## 📜 Project Structure
+## 💼 Merchant Operations Hub
 
-*   **/contracts**: Foundry-based smart contracts (Solidity ^0.8.24).
-*   **/frontend**: Next.js 16 (App Router) with Tailwind v4 and RainbowKit.
-*   **/walkthrough.md**: Technical deep-dive into implementation logic.
-*   **/pitch.md**: Submission narrative and demo script.
+The HashFlow Dashboard features:
+- **Total Portfolio Yield**: Live ticker aggregating interest across all active flows.
+- **Tax Liability Forecast**: Real-time preview of pending government remitments.
+- **Institutional Escrow Form**: Unified interface for initiating compliant settlements.
 
 ---
 
-## ⚖️ License
-MIT © 2026 HashFlow Protocol.
+*Powered by HashKey & Antigravity.*

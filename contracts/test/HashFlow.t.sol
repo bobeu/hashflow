@@ -120,8 +120,8 @@ contract HashFlowTest is Test {
         assertEq(token.balanceOf(address(escrow)),       0, "Escrow holds no raw tokens");
         assertGt(token.balanceOf(address(vault)),        0, "Vault received tokens");
 
-        // Snapshot owner balance before release — setUp mints 1_000e6 to owner.
-        uint256 ownerBefore = token.balanceOf(owner);
+        // Snapshot platform balance before release.
+        uint256 platformBefore = token.balanceOf(serviceVault);
 
         // Release the milestone.
         vm.prank(client);
@@ -129,10 +129,10 @@ contract HashFlowTest is Test {
 
         // Assert distributions (no yield in this test — 1:1 share ratio).
         assertEq(token.balanceOf(worker),        900e6, "Worker received 900");
-        assertEq(token.balanceOf(regionalVault),  80e6, "RegionalVault received 80");
-        assertEq(token.balanceOf(serviceVault),   20e6, "ServiceVault received 20");
-        // Owner should receive no platform yield when totalAssets == principal.
-        assertEq(token.balanceOf(owner), ownerBefore, "No yield, owner balance unchanged");
+        assertEq(token.balanceOf(regionalVault), 100e6, "RegionalVault received 100% tax (100)");
+        
+        // Platform should receive no yield fee when totalAssets == principal.
+        assertEq(token.balanceOf(serviceVault), platformBefore, "No yield, platform fee unchanged");
     }
 
     /**
@@ -273,17 +273,17 @@ contract HashFlowTest is Test {
         assertApproxEqAbs(value, 105e6, 1, "Milestone value ~$105 after yield injection");
 
         uint256 workerBefore = token.balanceOf(worker);
-        uint256 ownerBefore  = token.balanceOf(owner);
+        uint256 serviceBefore = token.balanceOf(serviceVault);
 
         vm.prank(client);
         escrow.releaseMilestone(id);
 
         uint256 workerGain   = token.balanceOf(worker) - workerBefore;
-        uint256 platformGain = token.balanceOf(owner)  - ownerBefore;
+        uint256 platformGain = token.balanceOf(serviceVault) - serviceBefore;
 
         // Total distributed must equal totalAssets retrieved from vault.
         assertApproxEqAbs(workerGain + platformGain, 105e6, 1, "Conservation: worker + platform approx $105");
-        // Yield split: each side gets ~$2.5 (1 wei tolerance for OZ rounding).
+        // Yield split default is 50%: each side gets ~$2.5 (1 wei tolerance for OZ rounding).
         assertApproxEqAbs(workerGain,   102_500_000, 1, "Worker: principal + ~half yield");
         assertApproxEqAbs(platformGain,   2_500_000, 1, "Platform: ~half yield");
     }
@@ -310,24 +310,21 @@ contract HashFlowTest is Test {
         uint256 workerBefore   = token.balanceOf(worker);
         uint256 regionalVaultBefore = token.balanceOf(regionalVault);
         uint256 serviceVaultBefore  = token.balanceOf(serviceVault);
-        uint256 ownerBefore    = token.balanceOf(owner);
 
         vm.prank(client);
         escrow.releaseMilestone(id);
 
         uint256 workerGain         = token.balanceOf(worker)        - workerBefore;
         uint256 regionalTaxGain    = token.balanceOf(regionalVault) - regionalVaultBefore;
-        uint256 serviceFeeGain     = token.balanceOf(serviceVault)  - serviceVaultBefore;
-        uint256 platformGain       = token.balanceOf(owner)         - ownerBefore;
+        uint256 platformGain       = token.balanceOf(serviceVault)  - serviceVaultBefore;
 
-        // Total tax (5% of 100 = 5) split 80/20 -> 4 government, 1 platform service.
-        assertEq(regionalTaxGain, 4_000_000, "RegionalVault: $4 tax");
-        assertEq(serviceFeeGain,  1_000_000, "ServiceVault: $1 service fee");
+        // Total tax (5% of 100 = 5) now 100% to government in Regulatory-Clean model.
+        assertEq(regionalTaxGain, 5_000_000, "RegionalVault: $5 tax (100% remittance)");
 
-        // Worker: $95 principal payout + ~$2.5 yield share ≈ $97.5 (1 wei tol.).
+        // Worker: $95 principal payout + ~$2.5 yield share (50% yield fee) ≈ $97.5 (1 wei tol.).
         assertApproxEqAbs(workerGain,  97_500_000, 1, "Worker: 95 + ~2.5");
         // Platform: ~$2.5 yield share (1 wei tolerance).
-        assertApproxEqAbs(platformGain, 2_500_000, 1, "Platform owner: ~2.5");
+        assertApproxEqAbs(platformGain, 2_500_000, 1, "Platform service fee: ~2.5");
     }
 
     /**
@@ -394,7 +391,7 @@ contract HashFlowTest is Test {
         vm.stopPrank();
 
         uint256 workerBefore  = token.balanceOf(worker);
-        uint256 ownerBefore   = token.balanceOf(owner);
+        uint256 serviceBefore = token.balanceOf(serviceVault);
 
         // The `client` field stored in the milestone is the actual client address,
         // so client must release (not the HSP).
@@ -402,7 +399,7 @@ contract HashFlowTest is Test {
         escrow.releaseMilestone(id);
 
         uint256 workerGain   = token.balanceOf(worker) - workerBefore;
-        uint256 platformGain = token.balanceOf(owner)  - ownerBefore;
+        uint256 platformGain = token.balanceOf(serviceVault) - serviceBefore;
 
         // $100 principal + ~$2.5 yield (1 wei tolerance for OZ virtual shares).
         assertApproxEqAbs(workerGain,   102_500_000, 1, "Worker: principal + ~half yield via HSP");
@@ -507,18 +504,17 @@ contract HashFlowTest is Test {
     /**
      * @notice $1 000 deposit at 10 % tax ($100 tax) → $80 to Gov, $20 to Service.
      */
-    function test_Phase5_TaxShreddingSplit() public {
+    function test_Phase5_TaxRemittance() public {
         uint256 id = _createEscrow(ONE_THOUSAND, TAX_10PCT);
 
-        // Expect FundsShredded(id, 100e6, 80e6, 20e6)
+        // Expect TaxRemitted(id, 100e6, regionalVault)
         vm.expectEmit(true, true, true, true, address(escrow));
-        emit HashFlowEscrow.FundsShredded(id, 100e6, 80e6, 20e6);
+        emit HashFlowEscrow.TaxRemitted(id, 100e6, regionalVault);
 
         vm.prank(client);
         escrow.releaseMilestone(id);
 
-        assertEq(token.balanceOf(regionalVault), 80e6, "80% to Government");
-        assertEq(token.balanceOf(serviceVault),  20e6, "20% to Service Fee");
+        assertEq(token.balanceOf(regionalVault), 100e6, "100% to Government");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -559,5 +555,61 @@ contract HashFlowTest is Test {
         escrow.releaseMilestone(0);
 
         assertEq(escrow.getTotalTaxLiability(client), 5e6, "Liability after release");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ── Phase 7: Regulatory-Clean & Multitenancy ─────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * @notice Platform yield fee can be adjusted to capture "Shadow Spread".
+     *         20% fee -> platform gets $1, worker gets $100 + $4.
+     */
+    function test_Phase7_YieldFeeAdjustment() public {
+        vm.prank(owner);
+        escrow.setYieldFee(2000); // 20 %
+
+        uint256 id = _createEscrow(ONE_HUNDRED, 0);
+
+        // Inject $5 yield.
+        vm.startPrank(owner);
+        token.approve(address(vault), FIVE);
+        vault.simulateYield(FIVE);
+        vm.stopPrank();
+
+        uint256 serviceBefore = token.balanceOf(serviceVault);
+        vm.prank(client);
+        escrow.releaseMilestone(id);
+
+        uint256 platformGain = token.balanceOf(serviceVault) - serviceBefore;
+        // 20% of 5e6 = 1e6.
+        assertApproxEqAbs(platformGain, 1_000_000, 1, "Platform gets 20% spread");
+    }
+
+    /**
+     * @notice Verifies on-chain indexing (clientMilestones) isolation.
+     */
+    function test_Phase7_Multitenancy() public {
+        address clientB = makeAddr("clientB");
+        token.mint(clientB, 1000e6);
+
+        // Client A creates one escrow.
+        _createEscrow(ONE_HUNDRED, 0);
+
+        // Client B creates two escrows.
+        vm.startPrank(clientB);
+        token.approve(address(escrow), 200e6);
+        escrow.createEscrow(worker, 100e6, 0);
+        escrow.createEscrow(worker, 100e6, 0);
+        vm.stopPrank();
+
+        uint256[] memory aIds = escrow.getMyMilestones(client);
+        uint256[] memory bIds = escrow.getMyMilestones(clientB);
+
+        assertEq(aIds.length, 1, "Client A has 1 escrow");
+        assertEq(bIds.length, 2, "Client B has 2 escrows");
+        assertEq(aIds[0], 0, "A ID matches");
+        assertEq(bIds[0], 1, "B ID 1 matches");
+        assertEq(bIds[1], 2, "B ID 2 matches");
     }
 }

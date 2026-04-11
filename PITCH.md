@@ -14,7 +14,7 @@
 *   **Action**: Click "Simulate HSP Payment."
 *   **Action**: Point to the **Yield Ticker**—this isn't just a number; it's real value accumulating for the worker and the institution.
 *   **Action**: Show the **ZK-Identity** badge. "We don't just pay; we verify. No identity, no settlement."
-*   **The Moment (The Shredder)**: Click "Release." Watch the funds split. "We've automated jurisdictional tax compliance. 80% to the government, 20% to the protocol. Settlement is now a compliance-native event."
+*   **The Moment (The Shredder)**: Click "Release." Watch the funds split. "This is the Regulatory-Clean model. 100% of jurisdictional tax goes straight to the government. The protocol monetizes the **Shadow Spread**—taking a fee from the generated interest, not the user's principal. It's fee-free settlement for the merchant, and automated compliance for the state."
 
 ### 4. The Conclusion (2:30 - 3:00)
 *   HashFlow is building the pipes for the institutional PayFi economy. We're solving for **Efficiency, Compliance, and Yield**—all in a single settlement transaction.
