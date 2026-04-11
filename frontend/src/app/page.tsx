@@ -33,6 +33,17 @@ const MOCK_FLOWS = [
   { id: 6, client: "0xBB9...a411", worker: "0x709...af8b", amount: "250 HSP", status: "Released", yield: "1.2 HSP" },
 ];
 
+interface MilestoneFlow {
+  id: number;
+  client: string;
+  worker: string;
+  amount: bigint;
+  taxBP: number;
+  isReleased: boolean;
+  yield: bigint;
+  taxRecipient: string;
+}
+
 export default function DashboardPage() {
   const { address, isConnected } = useAccount();
   const [isVerified, setIsVerified] = useState(false);
@@ -50,7 +61,7 @@ export default function DashboardPage() {
   // 1. Fetch my milestone IDs
   const { data: milestoneIds, refetch: refetchIds } = useReadContract({
     address: CONTRACTS.HashFlowEscrow.address,
-    abi: CONTRACTS.HashFlowEscrow.abi,
+    abi: CONTRACTS.HashFlowEscrow.abi as any,
     functionName: 'getMyMilestones',
     args: [address as `0x${string}`],
     query: { enabled: !!address }
@@ -61,38 +72,38 @@ export default function DashboardPage() {
     contracts: (milestoneIds as bigint[] || []).flatMap(id => [
       {
         address: CONTRACTS.HashFlowEscrow.address,
-        abi: CONTRACTS.HashFlowEscrow.abi,
+        abi: CONTRACTS.HashFlowEscrow.abi as any,
         functionName: 'milestones',
         args: [id]
       },
       {
         address: CONTRACTS.HashFlowEscrow.address,
-        abi: CONTRACTS.HashFlowEscrow.abi,
+        abi: CONTRACTS.HashFlowEscrow.abi as any,
         functionName: 'getPendingYield',
         args: [id]
       }
     ]),
-    query: { enabled: !!milestoneIds && milestoneIds.length > 0 }
+    query: { enabled: !!milestoneIds && (milestoneIds as bigint[]).length > 0 }
   });
 
   // 3. Process Multicall Data
   const processedFlows = React.useMemo(() => {
     if (!multicallData || !milestoneIds) return [];
     
-    const flows = [];
-    for (let i = 0; i < milestoneIds.length; i++) {
-      const milestone = multicallData[i * 2]?.result as any;
+    const flows: MilestoneFlow[] = [];
+    for (let i = 0; i < (milestoneIds as bigint[]).length; i++) {
+        const milestone = multicallData[i * 2]?.result as any;
       const interest = multicallData[i * 2 + 1]?.result as bigint;
       
       if (milestone) {
         flows.push({
-          id: Number(milestoneIds[i]),
+          id: Number((milestoneIds as bigint[])[i]),
           client: milestone[1],
           worker: milestone[2],
           amount: milestone[0],
           taxBP: milestone[3],
           isReleased: milestone[4],
-          yield: interest || 0n,
+          yield: interest || BigInt(0),
           taxRecipient: milestone[7]
         });
       }
@@ -102,10 +113,10 @@ export default function DashboardPage() {
 
   // 4. Aggregates
   const stats = React.useMemo(() => {
-    const active = processedFlows.filter(f => !f.isReleased);
-    const tvl = active.reduce((acc, curr) => acc + curr.amount, 0n);
-    const yieldAcc = active.reduce((acc, curr) => acc + curr.yield, 0n);
-    const taxLiab = active.reduce((acc, curr) => acc + (curr.amount * BigInt(curr.taxBP) / 10000n), 0n);
+    const active = processedFlows.filter((f: MilestoneFlow) => !f.isReleased);
+    const tvl = active.reduce((acc, curr) => acc + curr.amount, BigInt(0));
+    const yieldAcc = active.reduce((acc, curr) => acc + curr.yield, BigInt(0));
+    const taxLiab = active.reduce((acc, curr) => acc + (curr.amount * BigInt(curr.taxBP) / BigInt(10000)), BigInt(0));
     
     return {
       tvl: formatUnits(tvl, 6),
@@ -136,6 +147,7 @@ export default function DashboardPage() {
     e.preventDefault();
     if (!newWorker || !newAmount) return;
     
+    try {
         const taxRecipient = selectedJurisId === 'custom' 
             ? customTaxAddr 
             : JURISDICTIONS.find(j => j.id === selectedJurisId)?.address;
@@ -147,7 +159,7 @@ export default function DashboardPage() {
 
         const hash = await createEscrow({
             address: CONTRACTS.HashFlowEscrow.address,
-            abi: CONTRACTS.HashFlowEscrow.abi,
+            abi: CONTRACTS.HashFlowEscrow.abi as any,
             functionName: 'createEscrow',
             args: [newWorker as `0x${string}`, taxRecipient as `0x${string}`, parseUnits(newAmount, 6), Number(newTax)]
         });
@@ -164,7 +176,7 @@ export default function DashboardPage() {
     try {
         await releaseMilestone({
             address: CONTRACTS.HashFlowEscrow.address,
-            abi: CONTRACTS.HashFlowEscrow.abi,
+            abi: CONTRACTS.HashFlowEscrow.abi as any,
             functionName: 'releaseMilestone',
             args: [BigInt(id)]
         });
@@ -274,7 +286,7 @@ export default function DashboardPage() {
                     </td>
                   </tr>
                 )}
-                {processedFlows.map((flow) => (
+                {processedFlows.map((flow: MilestoneFlow) => (
                   <tr key={flow.id} className="group hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4 font-mono text-xs text-slate-500">#{flow.id}</td>
                     <td className="px-6 py-4 font-mono text-xs text-primary font-medium">{flow.worker.slice(0,6)}...{flow.worker.slice(-4)}</td>
