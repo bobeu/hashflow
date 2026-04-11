@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #F8FAFC;
+  --color-foreground: #001B3D;
+  
+  --color-primary: #001B3D;
+  --color-accent: #10B981;
+  --color-warning: #F59E0B;
+  --color-border: #E2E8F0;
+  
+  --font-sans: "Inter", "Geist Sans", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+}
+
+:root {
+  --background: #F8FAFC;
+  --foreground: #001B3D;
+  --primary: #001B3D;
+  --accent: #10B981;
+  --warning: #F59E0B;
+  --border: #E2E8F0;
+}
+
+@layer base {
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+  }
+  
+  .zebra-table tr:nth-child(even) {
+    background: rgba(226, 232, 240, 0.2);
+  }
+}
