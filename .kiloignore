@@ -1,0 +1,27 @@
+# ImpactPay- Zero-Bandwidth Ignore List
+
+# Environment & Configuration
+.env
+.env.*
+!.env.example
+
+# Build Artifacts
+node_modules/
+dist/
+build/
+*.lock
+.next/
+
+# Logs
+*.log
+logs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
