@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {IZKVerifier} from "./interfaces/IZKVerifier.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { IZKVerifier } from "./interfaces/IZKVerifier.sol";
+import { IHashFlowEscrow } from "./interfaces/IHashFlowEscrow.sol";
 
 /**
  * @title HashFlowEscrow
@@ -23,7 +24,7 @@ import {IZKVerifier} from "./interfaces/IZKVerifier.sol";
  *      All token movements use OpenZeppelin's {SafeERC20} to guard against non-standard
  *      ERC-20 implementations. Reentrancy is prevented via {ReentrancyGuard}.
  */
-contract HashFlowEscrow is ReentrancyGuard, Ownable {
+contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -63,10 +64,10 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
     // ─────────────────────────────────────────────────────────────────────────
 
     /// @notice The ERC-20 token used for all settlements.
-    IERC20 public immutable settlementToken;
+    IERC20 public settlementToken;
 
     /// @notice The ERC-4626 vault where idle funds earn yield.
-    IERC4626 public immutable vault;
+    IERC4626 public vault;
 
     /// @notice Recipient of the tax portion on each milestone release.
     address public taxVault;
@@ -269,9 +270,10 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
         _checkVerification(_worker);
 
         milestoneId = milestoneCount++;
+        address sender = _msgSender();
 
         // Pull tokens from client.
-        settlementToken.safeTransferFrom(msg.sender, address(this), _amount);
+        settlementToken.safeTransferFrom(sender, address(this), _amount);
 
         // Approve vault and deposit to earn yield.
         settlementToken.forceApprove(address(vault), _amount);
@@ -279,7 +281,7 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
 
         milestones[milestoneId] = Milestone({
             amount:       _amount,
-            client:       msg.sender,
+            client:       sender,
             worker:       _worker,
             taxRateBP:    _taxRateBP,
             isReleased:   false,
@@ -288,9 +290,9 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
             taxRecipient: _taxRecipient
         });
 
-        clientMilestones[msg.sender].push(milestoneId);
+        clientMilestones[sender].push(milestoneId);
 
-        emit EscrowCreated(milestoneId, msg.sender, _worker, _amount, _taxRateBP, shares);
+        emit EscrowCreated(milestoneId, sender, _worker, _amount, _taxRateBP, shares);
     }
 
     /**
@@ -323,7 +325,7 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
      *
      *         By routing HSP payments through HashFlow, merchants and banks transform
      *         static settlement capital into dynamic, yield-bearing assets while
-     *         ensuring automated tax compliance (the 80/20 shredding logic).
+     *         ensuring automated tax compliance (e.g the 80/20 shredding logic).
      *
      *         The HSP caller is trusted to have captured the client's intent and
      *         settlement tokens before invocation.
@@ -352,7 +354,7 @@ contract HashFlowEscrow is ReentrancyGuard, Ownable {
         milestoneId = milestoneCount++;
 
         // Pull tokens from the HSP contract (which acts as the client proxy).
-        settlementToken.safeTransferFrom(msg.sender, address(this), _amount);
+        settlementToken.safeTransferFrom(_msgSender(), address(this), _amount);
 
         // Approve vault and deposit.
         settlementToken.forceApprove(address(vault), _amount);
