@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { 
   BarChart3, 
@@ -19,19 +20,10 @@ import { ShredderViz } from '@/components/dashboard/shredder-viz';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { JurisdictionSelector, JURISDICTIONS } from '@/components/dashboard/jurisdiction-selector';
-import { useAccount, useReadContract, useReadContracts, useWriteContract, useWatchContractEvent } from 'wagmi';
+import { useConnection, useReadContract, useReadContracts, useWriteContract, useConfig } from 'wagmi';
+import { waitForTransactionReceipt } from "wagmi/actions";
 import { CONTRACTS } from '@/contracts';
-import { formatUnits, parseUnits } from 'viem';
-
-// Mock data for initial "Full" UI demo
-const MOCK_FLOWS = [
-  { id: 1, client: "0x7aB...1192", worker: "0xf39...2266", amount: "12,500 HSP", status: "Locked", yield: "124.4 HSP" },
-  { id: 2, client: "0x92A...1191", worker: "0x709...af8b", amount: "55,000 HSP", status: "Released", yield: "945.0 HSP" },
-  { id: 3, client: "0x11B...9901", worker: "0xf39...2266", amount: "8,200 HSP", status: "Locked", yield: "82.1 HSP" },
-  { id: 4, client: "0xFE2...0041", worker: "0x3C4...9981", amount: "4,500 HSP", status: "Released", yield: "12.0 HSP" },
-  { id: 5, client: "0x88C...3371", worker: "0xf39...2266", amount: "1,200 HSP", status: "Locked", yield: "3.5 HSP" },
-  { id: 6, client: "0xBB9...a411", worker: "0x709...af8b", amount: "250 HSP", status: "Released", yield: "1.2 HSP" },
-];
+import { formatUnits, Hex, parseUnits, formatEther } from 'viem';
 
 interface MilestoneFlow {
   id: number;
@@ -44,21 +36,33 @@ interface MilestoneFlow {
   taxRecipient: string;
 }
 
+// Mock data for initial "Full" UI demo
+const MOCK_FLOWS : MilestoneFlow[] = [
+  { id: 1, client: "0x7aB...1192", worker: "0xf39...2266", amount: BigInt(12500e6), taxRecipient: "0xc39...2bf3", yield: BigInt(1244e5), isReleased: false, taxBP: 300},
+  { id: 2, client: "0x92A...1191", worker: "0x709...af8b", amount: BigInt(55000e6), taxRecipient: "0xb30...2266", yield: BigInt(9450e5), isReleased:true, taxBP: 700 },
+  { id: 3, client: "0x11B...9901", worker: "0xf39...2266", amount: BigInt(8200e6), taxRecipient: "0xdd9...3309", yield: BigInt(821e5), isReleased: false, taxBP: 1000 },
+  { id: 4, client: "0xFE2...0041", worker: "0x3C4...9981", amount: BigInt(4500e6), taxRecipient: "0xff9...2232", yield: BigInt(120e5), isReleased: true, taxBP: 900 },
+  { id: 5, client: "0x88C...3371", worker: "0xf39...2266", amount: BigInt(1200e6), taxRecipient: "0x119...2122", yield: BigInt(35e5), isReleased: false, taxBP: 600 },
+  { id: 6, client: "0xBB9...a411", worker: "0x709...af8b", amount: BigInt(250e6), taxRecipient: "0xd39...9097", yield: BigInt(12e5), isReleased: true, taxBP: 450 },
+];
+
 export default function DashboardPage() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId } = useConnection();
+  const config = useConfig();
   const [isVerified, setIsVerified] = useState(false);
   const [showShredder, setShowShredder] = useState(false);
-  const [isLive, setIsLive] = useState(false);
   const [yieldTicker, setYieldTicker] = useState(12450.88);
   
   // Form State
   const [newWorker, setNewWorker] = useState('');
   const [newAmount, setNewAmount] = useState('');
-  const [newTax, setNewTax] = useState('1000'); // Default 10%
+  const [newTax, setNewTax] = useState('300'); // Default 3%
   const [selectedJurisId, setSelectedJurisId] = useState('hk');
   const [customTaxAddr, setCustomTaxAddr] = useState('');
 
-  // 1. Fetch my milestone IDs
+  const isLive = chainId !== undefined && chainId === 177;
+
+  // Fetch my milestone IDs
   const { data: milestoneIds, refetch: refetchIds } = useReadContract({
     address: CONTRACTS.HashFlowEscrow.address,
     abi: CONTRACTS.HashFlowEscrow.abi as any,
@@ -67,7 +71,18 @@ export default function DashboardPage() {
     query: { enabled: !!address }
   });
 
-  // 2. Batch fetch details for those IDs
+  // Fetch symbol and decimals
+  const { data: meta } = useReadContracts({
+    contracts: ['symbol', 'decimals', 'balanceOf'].map((fn, i) => ({
+      address: CONTRACTS.MockERC20.address,
+      abi: CONTRACTS.MockERC20.abi as any,
+      functionName: fn,
+      args: i === 2? [address] : []
+    })),
+    query: { enabled: isLive }
+  });
+
+  // Batch fetch details for those IDs
   const { data: multicallData, isLoading: isLoadingFlows } = useReadContracts({
     contracts: (milestoneIds as bigint[] || []).flatMap(id => [
       {
@@ -86,14 +101,26 @@ export default function DashboardPage() {
     query: { enabled: !!milestoneIds && (milestoneIds as bigint[]).length > 0 }
   });
 
+  const { symbol, decimals, balance } = React.useMemo(() => {
+    console.log("meta", meta);
+    const symbol = meta?.[0]?.result as string || 'USDT';
+    const decimals = meta?.[1]?.result as number || 6;
+    const balance = meta?.[2]?.result as bigint || 0n;
+    console.log("balance", balance)
+    return { symbol, decimals, balance: `${formatEther(balance)} ${symbol}` };
+  }, [meta]);
+
   // 3. Process Multicall Data
   const processedFlows = React.useMemo(() => {
-    if (!multicallData || !milestoneIds) return [];
+    if (!multicallData || !milestoneIds) return MOCK_FLOWS;
     
     const flows: MilestoneFlow[] = [];
     for (let i = 0; i < (milestoneIds as bigint[]).length; i++) {
-        const milestone = multicallData[i * 2]?.result as any;
+      console.log("multicallData", multicallData);
+      const milestone = multicallData[i * 2]?.result as any;
+      console.log("milestone", milestone);
       const interest = multicallData[i * 2 + 1]?.result as bigint;
+      console.log("interest", interest);
       
       if (milestone) {
         flows.push({
@@ -125,9 +152,11 @@ export default function DashboardPage() {
     };
   }, [processedFlows]);
 
-  const { writeContractAsync: releaseMilestone } = useWriteContract();
-  const { writeContractAsync: createEscrow } = useWriteContract();
-
+  const { mutateAsync: releaseMilestone } = useWriteContract();
+  const { mutateAsync: createEscrow } = useWriteContract();
+  const { mutateAsync: approve } = useWriteContract();
+  
+  
   // Update live yield ticker base
   useEffect(() => {
     if (stats.yield !== "0") {
@@ -143,46 +172,61 @@ export default function DashboardPage() {
     return () => clearInterval(timer);
   }, []);
 
-  const handleCreateEscrow = async (e: React.FormEvent) => {
+  const handleCreateEscrow = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!newWorker || !newAmount) return;
     
     try {
-        const taxRecipient = selectedJurisId === 'custom' 
-            ? customTaxAddr 
-            : JURISDICTIONS.find(j => j.id === selectedJurisId)?.address;
+      const taxRecipient = selectedJurisId === 'custom' 
+          ? customTaxAddr 
+          : JURISDICTIONS.find(j => j.id === selectedJurisId)?.address;
 
-        if (!taxRecipient || taxRecipient === '0x0000000000000000000000000000000000000000') {
-            toast.error("Invalid Authority", { description: "You must select a valid tax jurisdiction." });
-            return;
-        }
+      if (!taxRecipient || taxRecipient === '0x0000000000000000000000000000000000000000') {
+          toast.error("Invalid Authority", { description: "You must select a valid tax jurisdiction." });
+          return;
+      }
+      let hash : Hex = '0x';
 
-        const hash = await createEscrow({
-            address: CONTRACTS.HashFlowEscrow.address,
-            abi: CONTRACTS.HashFlowEscrow.abi as any,
-            functionName: 'createEscrow',
-            args: [newWorker as `0x${string}`, taxRecipient as `0x${string}`, parseUnits(newAmount, 6), Number(newTax)]
-        });
-        toast.success("Escrow Initiated", { description: `TX: ${hash.slice(0, 10)}...` });
-        setNewWorker('');
-        setNewAmount('');
-        refetchIds();
+      hash = await approve({
+        address: CONTRACTS.MockERC20.address,
+        abi: CONTRACTS.MockERC20.abi as any,
+        functionName: 'approve',
+        args: [CONTRACTS.HashFlowEscrow.address, parseUnits(newAmount, decimals)]
+      });
+      const approvalResult = await waitForTransactionReceipt(config, { hash });
+      if (approvalResult.status !== 'success') {
+        toast.error("Approval Failed", { description: "Token approval transaction failed." });
+        return;
+      }
+
+      hash = await createEscrow({
+        address: CONTRACTS.HashFlowEscrow.address,
+        abi: CONTRACTS.HashFlowEscrow.abi as any,
+        functionName: 'createEscrow',
+        args: [newWorker as `0x${string}`, taxRecipient as `0x${string}`, parseUnits(newAmount, 6), Number(newTax)]
+      });
+
+      const createResult = await waitForTransactionReceipt(config, { hash });
+      toast.success("Escrow Initiated", { description: `TX: ${createResult.transactionHash.slice(0, 10)}...` });
+      setNewWorker('');
+      setNewAmount('');
+      refetchIds();
     } catch (err: any) {
-        toast.error("Creation Failed", { description: err.message });
+      toast.error("Creation Failed", { description: err.message });
     }
   };
 
   const handleRelease = async (id: number) => {
     try {
-        await releaseMilestone({
-            address: CONTRACTS.HashFlowEscrow.address,
-            abi: CONTRACTS.HashFlowEscrow.abi as any,
-            functionName: 'releaseMilestone',
-            args: [BigInt(id)]
-        });
-        setShowShredder(true);
-        toast.success("Milestone Released", { description: "Funds shredded and routed." });
-        refetchIds();
+      await releaseMilestone({
+        address: CONTRACTS.HashFlowEscrow.address,
+        abi: CONTRACTS.HashFlowEscrow.abi as any,
+        functionName: 'releaseMilestone',
+        args: [BigInt(id)]
+      });
+      setShowShredder(true);
+      toast.success("Milestone Released", { description: "Funds shredded and routed." });
+      refetchIds();
     } catch (err: any) {
         toast.error("Release Failed", { description: err.message });
     }
@@ -205,21 +249,15 @@ export default function DashboardPage() {
     <div className="flex flex-col min-h-screen bg-slate-50 font-sans">
       {/* Header */}
       <header className="sticky top-0 z-10 glass-panel border-b border-slate-200 px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 bg-primary rounded-md flex items-center justify-center">
-            <Zap className="text-white w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-primary uppercase">HashFlow</h1>
-            <p className="text-[10px] text-slate-500 font-mono -mt-1 uppercase tracking-widest">Settlement Protocol</p>
-          </div>
+        <div className="flex items-center gap-3">
+          <Image src="/logo.svg" alt="HashFlow" width={150} height={150} className="object-contain" />
         </div>
         <div className="flex items-center gap-4">
             <div className="hidden md:flex items-center gap-1 px-3 py-1 bg-white border border-slate-200 rounded-full text-xs font-medium text-slate-500">
                 <span className={cn("w-2 h-2 rounded-full", isLive ? "bg-accent animate-pulse" : "bg-slate-300")} />
                 {isLive ? "HASHKEY MAINNET" : "SIMULATION MODE"}
             </div>
-          <ConnectButton showBalance={false} chainStatus="none" accountStatus="avatar" />
+          <ConnectButton showBalance={true} chainStatus="none" accountStatus="avatar" />
         </div>
       </header>
 
@@ -347,14 +385,17 @@ export default function DashboardPage() {
                 />
 
                 <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase">Amount (HSP)</label>
-                    <input 
-                        type="number" 
-                        placeholder="100.00" 
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-xs font-mono"
-                        value={newAmount}
-                        onChange={(e) => setNewAmount(e.target.value)}
-                    />
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">{`Amount ${symbol || 'USDT'}`}</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">{`Bal: ${balance}`}</label>
+                  </div>
+                  <input 
+                      type="number" 
+                      placeholder="100.00" 
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-xs font-mono"
+                      value={newAmount}
+                      onChange={(e) => setNewAmount(e.target.value)}
+                  />
                 </div>
                 <button 
                     type="submit"

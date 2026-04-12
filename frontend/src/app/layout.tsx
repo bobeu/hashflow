@@ -18,6 +18,10 @@ const jetBrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "HashFlow Protocol | CFO Command Center",
   description: "Next-generation PayFi Settlement & Tax Routing Dashboard",
+  icons: {
+    icon: "/logo.svg",
+    apple: "/logo.svg",
+  },
 };
 
 export default function RootLayout({

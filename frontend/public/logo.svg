@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" fill="none">
+  <rect width="400" height="120" fill="#ffffff"/>
+  
+  <!-- Logo Mark: Two diagonal lines converging to a solid block -->
+  <g transform="translate(20, 20)">
+    <!-- First diagonal vector (Flow) - Cyber Mint -->
+    <path d="M0 0 L35 80" stroke="#00FFD1" stroke-width="8" stroke-linecap="round"/>
+    
+    <!-- Second diagonal vector (Flow) - Sliding down -->
+    <path d="M15 0 L50 80" stroke="#1A1A1B" stroke-width="8" stroke-linecap="round"/>
+    
+    <!-- Settlement Block at terminal point - forms the "Vault" -->
+    <rect x="30" y="75" width="25" height="20" fill="#1A1A1B"/>
+  </g>
+  
+  <!-- Text: HashFlow -->
+  <g transform="translate(90, 70)">
+    <text font-family="'Inter', 'Montserrat', sans-serif" font-size="42" font-weight="300" fill="#1A1A1B">Hash</text>
+    <text x="108" font-family="'Inter', 'Montserrat', sans-serif" font-size="42" font-weight="700" fill="#00FFD1">Flow</text>
+  </g>
+</svg>

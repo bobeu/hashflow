@@ -63,6 +63,7 @@ contract Deploy is Script {
         taxVault      = vm.envOr("TAX_VAULT_ADDRESS", msg.sender);
         platformOwner = vm.envOr("PLATFORM_ADDRESS",  msg.sender);
 
+        address hspAddress = vm.envOr("HSP_ADDRESS", address(0));
         address serviceVault  = vm.envOr("AUTO_SERVICE_FEE_VAULT_ADDRESS", platformOwner);
 
         console2.log("=== HashFlow Protocol Deployment ===");
@@ -70,6 +71,7 @@ contract Deploy is Script {
         console2.log("Tax Vault    :", taxVault);
         console2.log("Service Fee:", serviceVault);
         console2.log("Platform     :", platformOwner);
+        console2.log("HSP Address  :", hspAddress);
         console2.log("Chain ID     :", block.chainid);
         console2.log("------------------------------------");
 
@@ -83,22 +85,25 @@ contract Deploy is Script {
         vault = new MockVault(address(token), platformOwner);
         console2.log("MockVault deployed      :", address(vault));
 
-        // ── Step 3: Core escrow (no HSP yet — set below) ─────────────────────
+        // ── Step 3: Core escrow ───────────────────────────────────────────
+        // Use provided HSP address, or deploy MockHSP for local testing
         escrow = new HashFlowEscrow(
             address(token),
             address(vault),
-            address(0),    // HSP address — registered after MockHSP deployment.
+            hspAddress,  // Use real HSP from env, or 0 for local testing
             platformOwner
         );
         console2.log("HashFlowEscrow deployed :", address(escrow));
 
-        // ── Step 4: Mock HSP caller ───────────────────────────────────────────
-        hsp = new MockHSP(address(token), address(escrow));
-        console2.log("MockHSP deployed        :", address(hsp));
-
-        // ── Step 5: Link HSP with the escrow ─────────────────────────────────
-        escrow.setHSPAddress(address(hsp));
-        console2.log("HSP registered          :", address(hsp));
+        // ── Step 4: Deploy MockHSP for local testing if no real HSP provided ─
+        if (hspAddress == address(0)) {
+            hsp = new MockHSP(address(token), address(escrow));
+            console2.log("MockHSP deployed        :", address(hsp));
+            escrow.setHSPAddress(address(hsp));
+            console2.log("HSP registered          :", address(hsp));
+        } else {
+            console2.log("Using real HSP address   :", hspAddress);
+        }
 
         // ── Step 6: Deploy & Link ZK Verifier ────────────────────────────────
         zk = new MockZKVerifier();
@@ -118,7 +123,7 @@ contract Deploy is Script {
         console2.log("  SETTLEMENT_TOKEN=", address(token));
         console2.log("  VAULT_ADDRESS    =", address(vault));
         console2.log("  ESCROW_ADDRESS   =", address(escrow));
-        console2.log("  HSP_ADDRESS      =", address(hsp));
+        console2.log("  HSP_ADDRESS      =", hspAddress == address(0) ? address(hsp) : hspAddress);
         console2.log("  ZK_VERIFIER_ADDR =", address(zk));
         console2.log("====================================");
     }

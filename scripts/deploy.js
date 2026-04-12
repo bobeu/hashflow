@@ -4,12 +4,12 @@ const path = require('path');
 
 const NETWORKS = {
   testnet: {
-    rpc: 'https://testnet.hsk.xyz',
+    rpc: 'https://hashkeychain-testnet.alt.technology',
     chainId: '133'
   },
   mainnet: {
-    rpc: 'https://mainnet.hsk.xyz',
-    chainId: '177' // Same chain ID for HashKey
+    rpc: 'https://hashkeychain.alt.technology',
+    chainId: '133' // HashKey Chain
   }
 };
 
@@ -76,7 +76,13 @@ function main() {
 
   console.log(`Deploying to HashKey ${networkName}...`);
   console.log(`Platform: ${env.PLATFORM_ADDRESS}`);
+  console.log(`HSP (USDC): ${env.HSP_ADDRESS || 'using deployment config'}`);
   console.log('');
+
+  // Build forge command with environment variables
+  const forgeEnv = { ...process.env };
+  if (env.HSP_ADDRESS) forgeEnv.HSP_ADDRESS = env.HSP_ADDRESS;
+  if (env.CHAIN_ID) forgeEnv.CHAIN_ID = env.CHAIN_ID;
 
   const child = spawn('forge', [
     'script', 'script/Deploy.s.sol:Deploy',
@@ -85,7 +91,8 @@ function main() {
     '--private-key', privateKey
   ], {
     cwd: path.join(__dirname, '..', 'contracts'),
-    stdio: 'inherit'
+    stdio: 'inherit',
+    env: forgeEnv
   });
 
   child.on('error', err => {
