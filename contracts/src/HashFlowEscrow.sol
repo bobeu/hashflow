@@ -69,12 +69,6 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
     /// @notice The ERC-4626 vault where idle funds earn yield.
     IERC4626 public vault;
 
-    /// @notice Recipient of the tax portion on each milestone release.
-    address public taxVault;
-
-    /// @notice Recipient of the 80% government portion of the tax.
-    address public regionalTaxVault;
-
     /// @notice Recipient of the 20% platform service portion of the tax.
     address public autoServiceFeeVault;
 
@@ -155,7 +149,12 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
     /**
      * @notice Emitted when a vault address is updated.
      */
-    event TaxVaultsUpdated(address regionalTaxVault, address autoServiceFeeVault);
+    event TaxVaultsUpdated(address taxVault, uint milestoneId);
+
+    /**
+     * @notice Emitted when a vault address is updated.
+     */
+    event TaxRateBPUpdated(uint16 taxRateBP, uint milestoneId);
 
     /**
      * @notice Emitted when the ZK Verifier address is updated.
@@ -206,27 +205,23 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
     /**
      * @notice Deploys the HashFlowEscrow contract.
      * @param _settlementToken ERC-20 token used for all payments.
-     * @param _vault           ERC-4626 compliant vault for yield generation.
-     * @param _taxVault        Address that receives the tax on each release.
-     * @param _hspAddress      Initial address of the HashKey Settlement Protocol caller.
-     * @param _owner           Initial owner (platform address that receives half the yield).
+     * @param erc4626CompliantVault ERC-4626 compliant vault for yield generation.
+     * @param _hspAddress Initial address of the HashKey Settlement Protocol caller.
+     * @param _owner Initial owner (platform address that receives half the yield).
      */
     constructor(
         address _settlementToken,
-        address _vault,
-        address _taxVault,
+        address erc4626CompliantVault,
         address _hspAddress,
         address _owner
     ) Ownable(_owner) {
         if (_settlementToken == address(0)) revert ZeroAddress();
-        if (_vault           == address(0)) revert ZeroAddress();
-        if (_taxVault        == address(0)) revert ZeroAddress();
-        if (_owner           == address(0)) revert ZeroAddress();
+        if (erc4626CompliantVault == address(0)) revert ZeroAddress();
+        if (_owner == address(0)) revert ZeroAddress();
 
         settlementToken = IERC20(_settlementToken);
-        vault           = IERC4626(_vault);
-        taxVault        = _taxVault;
-        hspAddress      = _hspAddress;  // Zero address disables HSP path
+        vault = IERC4626(erc4626CompliantVault);
+        hspAddress = _hspAddress;  // Zero address disables HSP path
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -235,7 +230,13 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
 
     /// @dev Restricts function access to the registered HSP address.
     modifier onlyHSP() {
-        if (msg.sender != hspAddress) revert NotHSP();
+        if (_msgSender() != hspAddress) revert NotHSP();
+        _;
+    }
+
+    modifier onlyClient(uint milestoneId) {
+        if (milestoneId >= milestoneCount) revert InvalidMilestoneId();
+        if (_msgSender() != milestones[milestoneId].client) revert NotClient();
         _;
     }
 
@@ -401,15 +402,34 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
     }
 
     /**
-     * @notice Updates the tax distribution vaults.
-     * @param _regionalTaxVault    New government tax vault.
-     * @param _autoServiceFeeVault New platform service fee vault.
+     * @notice Updates the platform yield fee vault address.
+     * @param _serviceVault New service fee vault address.
      */
-    function setTaxVaults(address _regionalTaxVault, address _autoServiceFeeVault) external onlyOwner {
-        if (_regionalTaxVault == address(0) || _autoServiceFeeVault == address(0)) revert ZeroAddress();
-        regionalTaxVault    = _regionalTaxVault;
-        autoServiceFeeVault = _autoServiceFeeVault;
-        emit TaxVaultsUpdated(_regionalTaxVault, _autoServiceFeeVault);
+    function setAutoServiceFeeVault(address _serviceVault) external onlyOwner {
+        if (_serviceVault == address(0)) revert ZeroAddress();
+        autoServiceFeeVault = _serviceVault;
+    }
+
+    /**
+     * @notice Updates the tax distribution vaults.
+     * @param taxDestination    New government tax vault.
+     * @param milestoneId Milestone id.
+     */
+    function setTaxVaults(address taxDestination, uint milestoneId) external onlyClient(milestoneId) {
+        if (taxDestination == address(0)) revert ZeroAddress();
+        milestones[milestoneId].taxRecipient = taxDestination;
+
+        emit TaxVaultsUpdated(taxDestination, milestoneId);
+    }
+
+    /**
+     * @notice Updates the tax basis point `taxRateBP`.
+     * @param _taxRateBP    New government tax vault.
+     * @param milestoneId Milestone id.
+     */
+    function setTaxtRateBP(uint16 _taxRateBP, uint milestoneId) external onlyClient(milestoneId) {
+        milestones[milestoneId].taxRateBP = _taxRateBP;
+        emit TaxRateBPUpdated(_taxRateBP, milestoneId);
     }
 
     /**
@@ -481,7 +501,7 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
     function _validateAndMarkReleased(uint256 _milestoneId) internal {
         if (_milestoneId >= milestoneCount) revert InvalidMilestoneId();
         Milestone storage m = milestones[_milestoneId];
-        if (msg.sender != m.client) revert NotClient();
+        if (_msgSender() != m.client) revert NotClient();
         if (m.isReleased)           revert AlreadyReleased();
         m.isReleased = true;
     }

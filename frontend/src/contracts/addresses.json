@@ -1,7 +1,7 @@
 {
-  "MockERC20": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
-  "MockVault": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
-  "HashFlowEscrow": "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0",
-  "MockHSP": "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9",
-  "MockZKVerifier": "0x5fc8d32690cc91d4c39d9d3abcbd16989f875707"
+  "MockERC20": "0x9f9f09832942e8a9030c089a589e4be8accc190c",
+  "MockVault": "0x9f1e3137eb94c8fc48e515c5d1f59d307c7c6c03",
+  "HashFlowEscrow": "0x97e7ee7951589c6ab0914510a381d496f1749f56",
+  "MockHSP": "0xa27d7e9dcfe7d21a0605be76f1c85f31cb511ede",
+  "MockZKVerifier": "0x8c70d7cfb5beb20ef54e025d761b630f4a756aa8"
 }

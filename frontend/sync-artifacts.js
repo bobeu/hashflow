@@ -8,8 +8,8 @@ const path = require('path');
  * directories to the frontend 'src/contracts' directory.
  */
 
-const FRONTEND_DIR = path.join(__dirname, '..', 'frontend', 'src', 'contracts');
-const BROADCAST_DIR = path.join(__dirname, 'broadcast', 'Deploy.s.sol');
+const FRONTEND_DIR = path.join(__dirname, '.', '/', 'src', 'contracts');
+const BROADCAST_DIR = path.join(__dirname, '../contracts/broadcast', 'Deploy.s.sol');
 const OUT_DIR = path.join(__dirname, 'out');
 
 // Ensure frontend directory exists

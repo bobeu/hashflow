@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {Test, console2} from "forge-std/Test.sol";
-import {HashFlowEscrow} from "../src/HashFlowEscrow.sol";
-import {MockVault}       from "../src/MockVault.sol";
-import {MockERC20}       from "../src/MockERC20.sol";
-import {MockHSP}         from "../src/MockHSP.sol";
-import {MockZKVerifier}  from "../src/MockZKVerifier.sol";
-import {IZKVerifier}    from "../src/interfaces/IZKVerifier.sol";
+import { Test, console2 } from "forge-std/Test.sol";
+import { HashFlowEscrow } from "../src/HashFlowEscrow.sol";
+import { MockVault } from "../src/MockVault.sol";
+import { MockERC20 } from "../src/MockERC20.sol";
+import { MockHSP } from "../src/MockHSP.sol";
+import { MockZKVerifier } from "../src/MockZKVerifier.sol";
+import { IZKVerifier } from "../src/interfaces/IZKVerifier.sol";
 
 /**
  * @title HashFlowTest
@@ -59,7 +59,6 @@ contract HashFlowTest is Test {
         escrow = new HashFlowEscrow(
             address(token),
             address(vault),
-            taxVault,
             address(0),
             owner
         );
@@ -70,7 +69,7 @@ contract HashFlowTest is Test {
         vm.startPrank(owner);
         escrow.setHSPAddress(address(hsp));
         escrow.setZKVerifier(address(zk));
-        escrow.setTaxVaults(regionalVault, serviceVault);
+        escrow.setAutoServiceFeeVault(serviceVault);
         vm.stopPrank();
 
         zk.setVerificationStatus(worker, true);
@@ -119,6 +118,7 @@ contract HashFlowTest is Test {
 
     function test_Phase2_YieldSplitWithTax() public {
         uint256 id = _createEscrow(ONE_HUNDRED, TAX_5PCT);
+
         vm.startPrank(owner);
         token.approve(address(vault), FIVE);
         vault.simulateYield(FIVE);
@@ -165,6 +165,51 @@ contract HashFlowTest is Test {
         assertEq(escrow.getMyMilestones(clientB).length, 2);
     }
 
+    function test_setTaxVaults_MilestoneSpecific() public {
+        uint256 id = _createEscrow(ONE_HUNDRED, TAX_5PCT);
+        address newTaxVault = makeAddr("newTaxVault");
+
+        // Try to update from non-client (Attacker)
+        vm.prank(attacker);
+        vm.expectRevert(HashFlowEscrow.NotClient.selector);
+        escrow.setTaxVaults(newTaxVault, id);
+
+        // Update from client
+        vm.prank(client);
+        escrow.setTaxVaults(newTaxVault, id);
+
+        // Verify state
+        (,,,,,,, address recipient) = escrow.milestones(id);
+        assertEq(recipient, newTaxVault);
+
+        // Verify routing on release
+        vm.prank(client);
+        escrow.releaseMilestone(id);
+        assertEq(token.balanceOf(newTaxVault), 5e6);
+    }
+
+    function test_setTaxRateBP_MilestoneSpecific() public {
+        uint256 id = _createEscrow(ONE_HUNDRED, TAX_5PCT);
+
+        // Try to update from non-client
+        vm.prank(attacker);
+        vm.expectRevert(HashFlowEscrow.NotClient.selector);
+        escrow.setTaxtRateBP(TAX_10PCT, id);
+
+        // Update from client
+        vm.prank(client);
+        escrow.setTaxtRateBP(TAX_10PCT, id);
+
+        // Verify state
+        (,,, uint16 taxBP,,,,) = escrow.milestones(id);
+        assertEq(taxBP, TAX_10PCT);
+
+        // Verify calculation on release
+        vm.prank(client);
+        escrow.releaseMilestone(id);
+        assertEq(token.balanceOf(regionalVault), 10e6);
+    }
+
     function test_CustomTaxRecipient() public {
         address hk = makeAddr("HK_IRD");
         address sg = makeAddr("SG_IRAS");
@@ -185,5 +230,181 @@ contract HashFlowTest is Test {
         vm.prank(clientB);
         escrow.releaseMilestone(idB);
         assertEq(token.balanceOf(sg), 100e6);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Additional Tests: Owner Functions & Edge Cases
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function test_SetYieldFee() public {
+        vm.prank(owner);
+        escrow.setYieldFee(3000);
+        assertEq(escrow.yieldFeeBP(), 3000);
+    }
+
+    function test_SetYieldFee_RevertWhenNotOwner() public {
+        vm.prank(client);
+        vm.expectRevert();
+        escrow.setYieldFee(3000);
+    }
+
+    function test_SetYieldFee_RevertWhenTooHigh() public {
+        vm.prank(owner);
+        vm.expectRevert(HashFlowEscrow.TaxRateTooHigh.selector);
+        escrow.setYieldFee(10001);
+    }
+
+    function test_SetHSPAddress() public {
+        address newHsp = makeAddr("newHSP");
+        vm.prank(owner);
+        escrow.setHSPAddress(newHsp);
+        assertEq(escrow.hspAddress(), newHsp);
+    }
+
+    function test_SetHSPAddress_RevertWhenNotOwner() public {
+        address newHsp = makeAddr("newHSP");
+        vm.prank(client);
+        vm.expectRevert();
+        escrow.setHSPAddress(newHsp);
+    }
+
+    function test_SetZKVerifier() public {
+        address newVerifier = makeAddr("newVerifier");
+        vm.prank(owner);
+        escrow.setZKVerifier(newVerifier);
+        assertEq(escrow.zkVerifier(), newVerifier);
+    }
+
+    function test_SetZKVerifier_RevertWhenNotOwner() public {
+        address newVerifier = makeAddr("newVerifier");
+        vm.prank(client);
+        vm.expectRevert();
+        escrow.setZKVerifier(newVerifier);
+    }
+
+    function test_SetAutoServiceFeeVault() public {
+        address newServiceVault = makeAddr("newServiceVault");
+        vm.prank(owner);
+        escrow.setAutoServiceFeeVault(newServiceVault);
+        assertEq(escrow.autoServiceFeeVault(), newServiceVault);
+    }
+
+    function test_SetAutoServiceFeeVault_RevertWhenZeroAddress() public {
+        vm.prank(owner);
+        vm.expectRevert(HashFlowEscrow.ZeroAddress.selector);
+        escrow.setAutoServiceFeeVault(address(0));
+    }
+
+    function test_GetPendingYield() public {
+        uint256 id = _createEscrow(ONE_HUNDRED, TAX_5PCT);
+        
+        vm.startPrank(owner);
+        token.approve(address(vault), FIVE);
+        vault.simulateYield(FIVE);
+        vm.stopPrank();
+
+        uint256 pendingYield = escrow.getPendingYield(id);
+        assertGt(pendingYield, 0);
+    }
+
+    function test_GetPendingYield_RevertInvalidMilestone() public {
+        vm.expectRevert(HashFlowEscrow.InvalidMilestoneId.selector);
+        escrow.getPendingYield(999);
+    }
+
+    function test_MilestoneValue() public {
+        uint256 id = _createEscrow(ONE_HUNDRED, TAX_5PCT);
+        uint256 value = escrow.milestoneValue(id);
+        assertGt(value, 0);
+    }
+
+    function test_MilestoneValue_RevertInvalidMilestone() public {
+        vm.expectRevert(HashFlowEscrow.InvalidMilestoneId.selector);
+        escrow.milestoneValue(999);
+    }
+
+    function test_GetTotalTaxLiability() public {
+        _createEscrow(ONE_HUNDRED, TAX_5PCT);
+        
+        uint256 liability = escrow.getTotalTaxLiability(client);
+        assertEq(liability, 5e6);
+    }
+
+    function test_CreateEscrow_RevertZeroWorker() public {
+        vm.startPrank(client);
+        token.approve(address(escrow), ONE_HUNDRED);
+        vm.expectRevert(HashFlowEscrow.ZeroAddress.selector);
+        escrow.createEscrow(address(0), regionalVault, ONE_HUNDRED, TAX_5PCT);
+        vm.stopPrank();
+    }
+
+    function test_CreateEscrow_RevertZeroTaxRecipient() public {
+        vm.startPrank(client);
+        token.approve(address(escrow), ONE_HUNDRED);
+        vm.expectRevert(HashFlowEscrow.ZeroAddress.selector);
+        escrow.createEscrow(worker, address(0), ONE_HUNDRED, TAX_5PCT);
+        vm.stopPrank();
+    }
+
+    function test_CreateEscrow_RevertZeroAmount() public {
+        vm.startPrank(client);
+        token.approve(address(escrow), ONE_HUNDRED);
+        vm.expectRevert(HashFlowEscrow.ZeroAmount.selector);
+        escrow.createEscrow(worker, regionalVault, 0, TAX_5PCT);
+        vm.stopPrank();
+    }
+
+    function test_CreateEscrow_RevertTaxRateTooHigh() public {
+        vm.startPrank(client);
+        token.approve(address(escrow), ONE_HUNDRED);
+        vm.expectRevert(HashFlowEscrow.TaxRateTooHigh.selector);
+        escrow.createEscrow(worker, regionalVault, ONE_HUNDRED, 10000);
+        vm.stopPrank();
+    }
+
+    function test_ReleaseMilestone_RevertNotClient() public {
+        uint256 id = _createEscrow(ONE_HUNDRED, TAX_5PCT);
+        vm.prank(attacker);
+        vm.expectRevert(HashFlowEscrow.NotClient.selector);
+        escrow.releaseMilestone(id);
+    }
+
+    function test_ReleaseMilestone_RevertAlreadyReleased() public {
+        uint256 id = _createEscrow(ONE_HUNDRED, TAX_5PCT);
+        vm.prank(client);
+        escrow.releaseMilestone(id);
+        vm.prank(client);
+        vm.expectRevert(HashFlowEscrow.AlreadyReleased.selector);
+        escrow.releaseMilestone(id);
+    }
+
+    function test_ReleaseMilestone_RevertInvalidMilestone() public {
+        vm.prank(client);
+        vm.expectRevert(HashFlowEscrow.InvalidMilestoneId.selector);
+        escrow.releaseMilestone(999);
+    }
+
+    function test_ReceiveHSPPayment_RevertNotHSP() public {
+        vm.prank(client);
+        vm.expectRevert(HashFlowEscrow.NotHSP.selector);
+        escrow.receiveHSPPayment(client, worker, regionalVault, ONE_HUNDRED, 0);
+    }
+
+    function test_YieldDistributionCorrect() public {
+        uint256 id = _createEscrow(ONE_HUNDRED, 0);
+        
+        vm.startPrank(owner);
+        token.approve(address(vault), 10e6);
+        vault.simulateYield(10e6);
+        vm.stopPrank();
+
+        uint256 workerBalanceBefore = token.balanceOf(worker);
+        
+        vm.prank(client);
+        escrow.releaseMilestone(id);
+
+        uint256 workerReceived = token.balanceOf(worker) - workerBalanceBefore;
+        assertApproxEqAbs(workerReceived, 105e6, 1e6, "Worker gets principal + half yield");
+        assertApproxEqAbs(token.balanceOf(serviceVault), 5e6, 1, "Platform gets half yield");
     }
 }

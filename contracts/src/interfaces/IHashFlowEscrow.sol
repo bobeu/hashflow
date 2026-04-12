@@ -94,4 +94,19 @@ interface IHashFlowEscrow {
      * @notice Returns all milestone IDs belonging to a specific client.
      */
     function getMyMilestones(address _client) external view returns (uint256[] memory);
+
+    
+    /**
+     * @notice Updates the tax distribution vaults.
+     * @param _taxVault    New government tax vault.
+     * @param _milestoneId Milestone id.
+     */
+    function setTaxVaults(address _taxVault, uint _milestoneId) external;
+
+    /**
+     * @notice Updates the tax taxRateBP.
+     * @param _taxRateBP    New tax rate in basis points.
+     * @param _milestoneId Milestone id.
+     */
+    function setTaxtRateBP(uint16 _taxRateBP, uint _milestoneId) external;
 }

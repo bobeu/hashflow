@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity 0.8.24;
 
-import {Script, console2} from "forge-std/Script.sol";
-import {MockERC20}        from "../src/MockERC20.sol";
-import {MockVault}        from "../src/MockVault.sol";
-import {MockHSP}          from "../src/MockHSP.sol";
-import {HashFlowEscrow}   from "../src/HashFlowEscrow.sol";
-import {MockZKVerifier}   from "../src/MockZKVerifier.sol";
+import { Script, console2 } from "forge-std/Script.sol";
+import { MockERC20 }        from "../src/MockERC20.sol";
+import { MockVault }        from "../src/MockVault.sol";
+import { MockHSP }          from "../src/MockHSP.sol";
+import { HashFlowEscrow }   from "../src/HashFlowEscrow.sol";
+import { MockZKVerifier }   from "../src/MockZKVerifier.sol";
 
 /**
  * @title Deploy
@@ -26,7 +26,7 @@ import {MockZKVerifier}   from "../src/MockZKVerifier.sol";
  * @dev     Required environment variables (set in .env, never commit):
  *            DEPLOYER_ADDRESS   — wallet that broadcasts the transactions.
  *            TAX_VAULT_ADDRESS  — destination for collected tax (can equal DEPLOYER_ADDRESS on testnet).
- *            PLATFORM_ADDRESS   — platform owner that receives 50 % of yield.
+ *            PLATFORM_ADDRESS   — platform owner that receives a portion of yield.
  *
  *          Run against HashKey testnet:
  *            forge script script/Deploy.s.sol:Deploy \
@@ -63,23 +63,23 @@ contract Deploy is Script {
         taxVault      = vm.envOr("TAX_VAULT_ADDRESS", msg.sender);
         platformOwner = vm.envOr("PLATFORM_ADDRESS",  msg.sender);
 
-        address regionalVault = vm.envOr("REGIONAL_TAX_VAULT_ADDRESS",  msg.sender);
-        address serviceVault  = vm.envOr("AUTO_SERVICE_FEE_VAULT_ADDRESS", msg.sender);
+        address serviceVault  = vm.envOr("AUTO_SERVICE_FEE_VAULT_ADDRESS", platformOwner);
 
         console2.log("=== HashFlow Protocol Deployment ===");
         console2.log("Deployer     :", deployer);
         console2.log("Tax Vault    :", taxVault);
+        console2.log("Service Fee:", serviceVault);
         console2.log("Platform     :", platformOwner);
         console2.log("Chain ID     :", block.chainid);
         console2.log("------------------------------------");
 
         vm.startBroadcast();
 
-        // ── Step 1: Settlement token ──────────────────────────────────────────
+        // Settlement token ──────────────────────────────────────────
         token = new MockERC20("Mock USD", "mUSD", 6);
         console2.log("MockERC20 deployed      :", address(token));
 
-        // ── Step 2: ERC-4626 yield vault ─────────────────────────────────────
+        // ERC-4626 yield vault ─────────────────────────────────────
         vault = new MockVault(address(token), platformOwner);
         console2.log("MockVault deployed      :", address(vault));
 
@@ -87,7 +87,6 @@ contract Deploy is Script {
         escrow = new HashFlowEscrow(
             address(token),
             address(vault),
-            taxVault,
             address(0),    // HSP address — registered after MockHSP deployment.
             platformOwner
         );
@@ -106,11 +105,10 @@ contract Deploy is Script {
         escrow.setZKVerifier(address(zk));
         console2.log("ZK Verifier deployed    :", address(zk));
 
-        // ── Step 7: Configure Tax Split ──────────────────────────────────────
-        escrow.setTaxVaults(regionalVault, serviceVault);
-        console2.log("Tax vaults configured   :");
-        console2.log("  Regional   :", regionalVault);
-        console2.log("  Service Fee:", serviceVault);
+        if (serviceVault != address(0)) {
+            escrow.setAutoServiceFeeVault(serviceVault);
+            console2.log("Service Fee Vault set   :", serviceVault);
+        }
 
         vm.stopBroadcast();
 

@@ -7,6 +7,7 @@ contracts/broadcast/
 # ── Environment secrets (NEVER commit) ───────────────────────────────────────
 .env
 contracts/.env
+frontend/.env
 
 # ── OS / IDE cruft ────────────────────────────────────────────────────────────
 .DS_Store
