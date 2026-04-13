@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" fill="none">
-  <rect width="400" height="120" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 120" fill="none">
+  <rect width="80" height="120" fill="#ffffff"/>
   
   <!-- Logo Mark: Monotone Black/White version -->
   <g transform="translate(20, 20)">
@@ -9,11 +9,5 @@
     
     <!-- Settlement Block -->
     <rect x="30" y="75" width="25" height="20" fill="#1A1A1B"/>
-  </g>
-  
-  <!-- Text: Monotone -->
-  <g transform="translate(90, 70)">
-    <text font-family="'Inter', 'Montserrat', sans-serif" font-size="42" font-weight="300" fill="#1A1A1B">Hash</text>
-    <text x="108" font-family="'Inter', 'Montserrat', sans-serif" font-size="42" font-weight="700" fill="#1A1A1B">Flow</text>
   </g>
 </svg>
