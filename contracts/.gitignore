@@ -1,0 +1,37 @@
+node_modules
+
+# Secret files
+.env
+.env*.local
+
+# Hardhat files
+/cache
+/artifacts
+
+# TypeChain files
+/typechain
+/typechain-types
+
+# Large deployment files
+/deployments
+deployments
+/dist
+
+# solidity-coverage files
+/coverage
+/coverage.
+
+# Dev files
+/residue.md
+residue.md
+
+# Hardhat Ignition default folder for deployments against a local node
+ignition/deployments/chain-31337
+
+# Dev files
+_d_.json
+/_d_.json
+/residue.md
+/runContract.ts
+/test.ts
+/hashes.ts

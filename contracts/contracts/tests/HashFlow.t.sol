@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity 0.8.24;
 
 import { Test, console2 } from "forge-std/Test.sol";
-import { HashFlowEscrow } from "../contracts/HashFlowEscrow.sol";
-import { MockVault } from "../contracts/MockVault.sol";
-import { MockERC20 } from "../contracts/MockERC20.sol";
-import { MockHSP } from "../contracts/MockHSP.sol";
-import { MockZKVerifier } from "../contracts/MockZKVerifier.sol";
-import { IZKVerifier } from "../contracts/interfaces/IZKVerifier.sol";
+import { HashFlowEscrow } from "../src/HashFlowEscrow.sol";
+import { MockVault } from "../src/MockVault.sol";
+import { MockERC20 } from "../src/MockERC20.sol";
+import { MockHSP } from "../src/MockHSP.sol";
+import { MockZKVerifier } from "../src/MockZKVerifier.sol";
+import { IZKVerifier } from "../src/interfaces/IZKVerifier.sol";
 
 /**
  * @title HashFlowTest

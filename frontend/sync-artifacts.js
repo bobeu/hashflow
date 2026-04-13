@@ -1,88 +1,127 @@
-const fs = require('fs');
+const fs   = require('fs');
 const path = require('path');
 
 /**
  * sync-artifacts.js
- * 
- * Automatically propagates contract ABIs and addresses from Foundry 'out' and 'broadcast'
- * directories to the frontend 'src/contracts' directory.
+ *
+ * Propagates contract ABIs and addresses from the hardhat-deploy
+ * `contracts_new/deployments/<network>/` directory to the frontend
+ * `src/contracts/` directory.
+ *
+ * Priority:
+ *   1. deployments/testnet/  (HashKey Testnet — production)
+ *   2. deployments/mainnet/  (HashKey Mainnet)
+ *   3. deployments/hardhat/  (local hardhat node — dev/CI fallback)
+ *
+ * Usage:
+ *   cd frontend && node sync-artifacts.js
+ *   -- or from contracts_new --
+ *   bun sync:data
  */
 
-const FRONTEND_DIR = path.join(__dirname, '.', '/', 'src', 'contracts');
-const BROADCAST_DIR = path.join(__dirname, '../contracts/broadcast', 'Deploy.s.sol');
-const OUT_DIR = path.join(__dirname, '../contracts/out');
+const FRONTEND_DIR    = path.join(__dirname, 'src', 'contracts');
+const DEPLOYMENTS_ROOT = path.join(__dirname, '../contracts/deployments');
 
-// Ensure frontend directory exists
+// Network priority order — first directory that exists wins
+const NETWORK_PRIORITY = ['testnet', 'mainnet', 'hardhat', 'localhost'];
+
+// Contracts we care about syncing
+const CONTRACTS_TO_SYNC = [
+  'HashFlowEscrow',
+  'MockUSDC_EIP3009',
+  'MockVault',
+  'MockHSP',
+  'MockZKVerifier',
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ensure frontend contracts directory exists
+// ─────────────────────────────────────────────────────────────────────────────
 if (!fs.existsSync(FRONTEND_DIR)) {
-    fs.mkdirSync(FRONTEND_DIR, { recursive: true });
+  fs.mkdirSync(FRONTEND_DIR, { recursive: true });
 }
 
 function sync() {
-    console.log('--- Syncing HashFlow Artifacts ---');
+  console.log('--- Syncing HashFlow Artifacts (hardhat-deploy) ---');
 
-    // 1. Find the latest broadcast
-    if (!fs.existsSync(BROADCAST_DIR)) {
-        console.warn('No broadcast directory found. Skipping address sync. Run a broadcasted deployment first.');
-    } else {
-        const chains = fs.readdirSync(BROADCAST_DIR).filter(f => fs.statSync(path.join(BROADCAST_DIR, f)).isDirectory());
-        if (chains.length === 0) {
-            console.warn('No chain-specific broadcast found.');
-        } else {
-            // Pick the latest chain/run (assuming only one or the user just deployed)
-            const chainId = chains[0]; 
-            console.log("Chains: ", chains);
-            const runPath = path.join(BROADCAST_DIR, chainId, 'run-latest.json');
-            
-            if (fs.existsSync(runPath)) {
-                const runData = JSON.parse(fs.readFileSync(runPath, 'utf8'));
-                const addresses = {};
+  if (!fs.existsSync(DEPLOYMENTS_ROOT)) {
+    console.warn('No deployments directory found at', DEPLOYMENTS_ROOT);
+    console.warn('Run: cd contracts_new && bun deploy:testnet');
+    process.exit(1);
+  }
 
-                runData.transactions.forEach(tx => {
-                    if (tx.transactionType === 'CREATE' && tx.contractName) {
-                        addresses[tx.contractName] = tx.contractAddress;
-                    }
-                });
+  // ── 1. Find the best available network deployment ──────────────────────────
+  let networkDir = null;
+  let networkName = null;
 
-                fs.writeFileSync(
-                    path.join(FRONTEND_DIR, 'addresses.json'),
-                    JSON.stringify(addresses, null, 2)
-                );
-                console.log(`Synced addresses for: ${Object.keys(addresses).join(', ')}`);
-            }
-        }
+  for (const net of NETWORK_PRIORITY) {
+    const candidate = path.join(DEPLOYMENTS_ROOT, net);
+    if (fs.existsSync(candidate)) {
+      networkDir  = candidate;
+      networkName = net;
+      break;
     }
+  }
 
-    // 2. Sync ABIs
-    const contractsToSync = [
-        'HashFlowEscrow',
-        'MockUSDC_EIP3009',
-        'MockVault',
-        'MockHSP',
-        'MockZKVerifier'
-    ];
+  // Also allow any directory that exists (for custom network names)
+  if (!networkDir) {
+    const dirs = fs.readdirSync(DEPLOYMENTS_ROOT)
+      .filter(f => fs.statSync(path.join(DEPLOYMENTS_ROOT, f)).isDirectory() && f !== '.chainId');
+    if (dirs.length > 0) {
+      networkName = dirs[0];
+      networkDir  = path.join(DEPLOYMENTS_ROOT, networkName);
+    }
+  }
 
-    const abis = {};
+  if (!networkDir) {
+    console.warn('No deployment found in', DEPLOYMENTS_ROOT);
+    console.warn('Run: cd contracts_new && bun deploy:testnet');
+    process.exit(1);
+  }
 
-    contractsToSync.forEach(name => {
-        const jsonPath = path.join(OUT_DIR, `${name}.sol`, `${name}.json`);
-        if (fs.existsSync(jsonPath)) {
-            const data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-            abis[name] = data.abi;
-        } else {
-            console.warn(`Artifact not found for ${name} at ${jsonPath}`);
-        }
-    });
+  console.log('Reading deployments from network:', networkName, '->', networkDir);
 
-    fs.writeFileSync(
-        path.join(FRONTEND_DIR, 'abis.json'),
-        JSON.stringify(abis, null, 2)
-    );
-    console.log(`Synced ABIs for: ${Object.keys(abis).join(', ')}`);
+  // ── 2. Read addresses and ABIs from per-contract JSON files ───────────────
+  const addresses = {};
+  const abis      = {};
 
-    // 3. Generate a typescript helper
-    const tsContent = `/**
- * Generated by sync-artifacts.js
- * DO NOT EDIT MANUALLY
+  CONTRACTS_TO_SYNC.forEach(name => {
+    const filePath = path.join(networkDir, `${name}.json`);
+    if (fs.existsSync(filePath)) {
+      const data       = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      addresses[name]  = data.address;
+      abis[name]       = data.abi;
+      console.log(`  Synced ${name} @ ${data.address}`);
+    } else {
+      console.warn(`  WARNING: ${name}.json not found in ${networkDir}. Falling back to compiled artifacts for ABI.`);
+      // Extract from artifacts fallback
+      const artifactPath = path.join(__dirname, `../contracts/artifacts/contracts/${name}.sol/${name}.json`);
+      if (fs.existsSync(artifactPath)) {
+        const artifactData = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
+        abis[name] = artifactData.abi;
+        console.log(`  Resolved ABI for ${name} from artifacts.`);
+      } else {
+        console.error(`  CRITICAL: Cannot resolve ABI for ${name}`);
+      }
+    }
+  });
+
+  // Write addresses.json
+  fs.writeFileSync(
+    path.join(FRONTEND_DIR, 'addresses.json'),
+    JSON.stringify(addresses, null, 2),
+  );
+
+  // Write abis.json
+  fs.writeFileSync(
+    path.join(FRONTEND_DIR, 'abis.json'),
+    JSON.stringify(abis, null, 2),
+  );
+
+  // ── 3. Generate TypeScript index helper ────────────────────────────────────
+  const tsContent = `/**
+ * Generated by sync-artifacts.js — DO NOT EDIT MANUALLY.
+ * Source: contracts_new/deployments/${networkName}/
  */
 
 import _addresses from './addresses.json';
@@ -90,13 +129,18 @@ import abis from './abis.json';
 
 const addresses = _addresses as Record<string, string>;
 
+// Official HashKey Testnet USDC address (used when MockUSDC_EIP3009 is not deployed)
+const OFFICIAL_USDC = '0x79AEc4EeA31D50792F61D1Ca0733C18c89524C9e';
+
 export const CONTRACTS = {
   HashFlowEscrow: {
     address: addresses.HashFlowEscrow as \`0x\${string}\`,
     abi: abis.HashFlowEscrow,
   },
   MockERC20: {
-    address: (addresses.MockERC20 || addresses.MockUSDC_EIP3009) as \`0x\${string}\`,
+    // On HashKey Testnet the settlement token is the official USDC — no MockUSDC is deployed.
+    // On local hardhat the MockUSDC_EIP3009 address is used.
+    address: (addresses.MockUSDC_EIP3009 || OFFICIAL_USDC) as \`0x\${string}\`,
     abi: abis.MockUSDC_EIP3009,
   },
   MockZKVerifier: {
@@ -116,9 +160,13 @@ export const CONTRACTS = {
 export type ContractName = keyof typeof CONTRACTS;
 `;
 
-    fs.writeFileSync(path.join(FRONTEND_DIR, 'index.ts'), tsContent);
-    console.log('Generated index.ts helper.');
-    console.log('--- Sync Complete ---');
+  fs.writeFileSync(path.join(FRONTEND_DIR, 'index.ts'), tsContent);
+
+  console.log('');
+  console.log('Addresses written to :', path.join(FRONTEND_DIR, 'addresses.json'));
+  console.log('ABIs written to      :', path.join(FRONTEND_DIR, 'abis.json'));
+  console.log('index.ts generated   :', path.join(FRONTEND_DIR, 'index.ts'));
+  console.log('--- Sync Complete ---');
 }
 
 sync();

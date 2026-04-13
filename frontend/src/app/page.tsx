@@ -24,6 +24,7 @@ import { useAccount, useReadContract, useReadContracts, useWriteContract, useCon
 import { waitForTransactionReceipt } from "wagmi/actions";
 import { CONTRACTS } from '@/contracts';
 import { formatUnits, Hex, parseUnits, formatEther } from 'viem';
+import { TransactionModal, TransactionStage } from '@/components/TransactionModal';
 
 interface MilestoneFlow {
   id: number;
@@ -49,9 +50,13 @@ const MOCK_FLOWS: MilestoneFlow[] = [
 export default function DashboardPage() {
   const { address, isConnected, chainId } = useAccount();
   const config = useConfig();
-  const [isVerified, setIsVerified] = useState(false);
   const [showShredder, setShowShredder] = useState(false);
   const [yieldTicker, setYieldTicker] = useState(12450.88);
+
+  // Modal State
+  const [modalStage, setModalStage] = useState<TransactionStage>('idle');
+  const [modalTxHash, setModalTxHash] = useState<string>('');
+  const [modalError, setModalError] = useState<string>('');
 
   // Form State
   const [newWorker, setNewWorker] = useState('');
@@ -64,6 +69,19 @@ export default function DashboardPage() {
 
   // Pending Simulations State
   const [pendingSimulations, setPendingSimulations] = useState<any[]>([]);
+
+  const isValidAddress = newWorker.length === 42 && newWorker.startsWith('0x');
+
+  // Read ZK Verify Status
+  const { data: isZkVerified, refetch: refetchZk } = useReadContract({
+    address: CONTRACTS.MockZKVerifier.address,
+    abi: CONTRACTS.MockZKVerifier.abi as any,
+    functionName: 'isVerified',
+    args: [newWorker as `0x${string}`],
+    query: { enabled: isValidAddress }
+  });
+
+  const isVerified = isValidAddress && Boolean(isZkVerified);
 
   // Fetch my milestone IDs
   const { data: milestoneIds, refetch: refetchIds } = useReadContract({
@@ -159,6 +177,7 @@ export default function DashboardPage() {
   const { writeContractAsync: createEscrow } = useWriteContract();
   const { writeContractAsync: approve } = useWriteContract();
   const { writeContractAsync: createEscrowWithAuth } = useWriteContract();
+  const { writeContractAsync: mockVerify } = useWriteContract();
   const { signTypedDataAsync } = useSignTypedData();
 
   // Update live yield ticker base
@@ -181,6 +200,10 @@ export default function DashboardPage() {
     if (!newWorker || !newAmount) return;
 
     try {
+      setModalStage('awaiting_auth');
+      setModalTxHash('');
+      setModalError('');
+
       const taxRecipient = selectedJurisId === 'custom'
         ? customTaxAddr
         : JURISDICTIONS.find(j => j.id === selectedJurisId)?.address;
@@ -273,17 +296,33 @@ export default function DashboardPage() {
             ]
           });
 
+          setModalStage('payment_included');
+          setModalTxHash(hash);
+
           const createResult = await waitForTransactionReceipt(config, { hash });
-          toast.success("Gasless Escrow Initiated", { description: `TX: ${createResult.transactionHash.slice(0, 10)}...` });
-          setNewWorker('');
-          setNewAmount('');
-          refetchIds();
+
+          setModalStage('verifying');
+
+          setTimeout(() => {
+            setModalStage('success');
+            toast.success("Gasless Escrow Initiated", { description: `TX: ${createResult.transactionHash.slice(0, 10)}...` });
+            setNewWorker('');
+            setNewAmount('');
+            refetchIds();
+            setTimeout(() => setModalStage('idle'), 3000);
+          }, 1500);
           return;
         } catch (err: any) {
           console.error('[EIP-3009] Revert details:', err);
+          setModalStage('idle');
+          if (err?.message?.includes('User rejected')) {
+            throw new Error("User canceled the transaction signature.");
+          }
           toast.warning("One-Click Failed", { description: err?.shortMessage || err?.message || 'EIP-3009 reverted. Falling back to standard flow.' });
         }
       }
+
+      setModalStage('awaiting_auth');
 
       hash = await approve({
         address: CONTRACTS.MockERC20.address,
@@ -291,12 +330,15 @@ export default function DashboardPage() {
         functionName: 'approve',
         args: [CONTRACTS.HashFlowEscrow.address, parseUnits(newAmount, decimals)]
       });
+      setModalStage('payment_included');
+      setModalTxHash(hash);
+
       const approvalResult = await waitForTransactionReceipt(config, { hash });
       if (approvalResult.status !== 'success') {
-        toast.error("Approval Failed", { description: "Token approval transaction failed." });
-        return;
+        throw new Error("Token approval failed.");
       }
 
+      setModalStage('awaiting_auth');
       hash = await createEscrow({
         address: CONTRACTS.HashFlowEscrow.address,
         abi: CONTRACTS.HashFlowEscrow.abi as any,
@@ -304,29 +346,64 @@ export default function DashboardPage() {
         args: [newWorker as `0x${string}`, taxRecipient as `0x${string}`, parseUnits(newAmount, 6), Number(newTax)]
       });
 
+      setModalStage('payment_included');
+      setModalTxHash(hash);
+
       const createResult = await waitForTransactionReceipt(config, { hash });
-      toast.success("Escrow Initiated", { description: `TX: ${createResult.transactionHash.slice(0, 10)}...` });
-      setNewWorker('');
-      setNewAmount('');
-      refetchIds();
+      setModalStage('verifying');
+
+      setTimeout(() => {
+        setModalStage('success');
+        toast.success("Escrow Initiated", { description: `TX: ${createResult.transactionHash.slice(0, 10)}...` });
+        setNewWorker('');
+        setNewAmount('');
+        refetchIds();
+        setTimeout(() => setModalStage('idle'), 3000);
+      }, 1500);
+
     } catch (err: any) {
+      setModalStage('error');
+      setModalError(err?.shortMessage || err?.message || "Transaction failed.");
       toast.error("Creation Failed", { description: err.message });
+      setTimeout(() => setModalStage('idle'), 3000);
     }
   };
 
   const handleRelease = async (id: number) => {
     try {
-      await releaseMilestone({
+      setModalStage('awaiting_auth');
+      setModalTxHash('');
+      setModalError('');
+
+      const hash = await releaseMilestone({
         address: CONTRACTS.HashFlowEscrow.address,
         abi: CONTRACTS.HashFlowEscrow.abi as any,
         functionName: 'releaseMilestone',
         args: [BigInt(id)]
-      });
-      setShowShredder(true);
-      toast.success("Milestone Released", { description: "Funds shredded and routed." });
-      refetchIds();
+      } as any);
+
+      setModalStage('payment_included');
+      setModalTxHash(hash);
+
+      await waitForTransactionReceipt(config, { hash });
+
+      setModalStage('verifying');
+
+      setTimeout(() => {
+        setModalStage('success');
+        toast.success("Milestone Released", { description: "Funds shredded and routed." });
+        refetchIds();
+        setTimeout(() => {
+          setModalStage('idle');
+          setShowShredder(true);
+        }, 3000);
+      }, 1500);
+
     } catch (err: any) {
+      setModalStage('error');
+      setModalError(err?.shortMessage || err?.message || "Release failed.");
       toast.error("Release Failed", { description: err.message });
+      setTimeout(() => setModalStage('idle'), 3000);
     }
   };
 
@@ -346,11 +423,22 @@ export default function DashboardPage() {
     }, 3000);
   };
 
-  const handleMockVerify = () => {
-    setIsVerified(true);
-    toast.info("ZK-Identity Verified", {
-      description: "Wallet cleared for HashKey compliance gate.",
-    });
+  const handleMockVerify = async () => {
+    if (!isValidAddress) return;
+    try {
+      const hash = await mockVerify({
+        address: CONTRACTS.MockZKVerifier.address,
+        abi: CONTRACTS.MockZKVerifier.abi as any,
+        functionName: 'setVerificationStatus',
+        args: [newWorker as `0x${string}`, true]
+      });
+      toast.info("ZK-Identity Verification", { description: "Simulating institutional compliance..." });
+      await waitForTransactionReceipt(config, { hash });
+      refetchZk();
+      toast.success("Wallet Verified", { description: "Cleared for HashKey compliance gate." });
+    } catch (err: any) {
+      toast.error("Verification Failed", { description: err.shortMessage || err.message });
+    }
   };
 
   return (
@@ -511,64 +599,82 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Form — visually locked when !isVerified */}
-            <form onSubmit={handleCreateEscrow} className={cn(
-              "space-y-4 transition-all duration-300",
-              !isVerified && "opacity-50 grayscale pointer-events-none select-none"
-            )}>
+            {/* Form */}
+            <form onSubmit={handleCreateEscrow} className="space-y-4 transition-all duration-300">
+
+              {!isLive && isValidAddress && !isVerified && (
+                <div className="mb-4 bg-orange-500/10 border border-orange-500/20 rounded-md p-3 transition-all">
+                  <div className="flex items-start gap-3">
+                    <ShieldAlert className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold text-orange-600">Worker not found in ZK-Registry.</p>
+                      <p className="text-[10px] text-orange-500/80 mb-3 mt-1">To simulate compliance, verify this address below.</p>
+                      <button
+                        type="button"
+                        onClick={handleMockVerify}
+                        className="text-[10px] bg-[#00FFD1] text-slate-900 font-bold px-3 py-1.5 rounded-full hover:bg-[#00FFD1]/80 transition-shadow shadow-[0_0_10px_rgba(0,255,209,0.2)] hover:shadow-[0_0_15px_rgba(0,255,209,0.4)]"
+                      >
+                        One-Click ZK-Verification
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase">Worker Address</label>
                 <input
                   type="text"
                   placeholder="0x..."
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-xs font-mono"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all"
                   value={newWorker}
                   onChange={(e) => setNewWorker(e.target.value)}
-                  disabled={!isVerified}
                 />
               </div>
 
-              <JurisdictionSelector
-                selectedId={selectedJurisId}
-                customAddress={customTaxAddr}
-                onSelect={setSelectedJurisId}
-                onCustomAddressChange={setCustomTaxAddr}
-              />
-
-              <div className="space-y-1">
-                <div className="flex justify-between items-center">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Tax Rate (bps)</label>
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    {newTax ? `${(Number(newTax) / 100).toFixed(2)}%` : '0.00%'}
-                  </span>
-                </div>
-                <input
-                  type="number"
-                  placeholder="300"
-                  min="0"
-                  max="10000"
-                  step="1"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all"
-                  value={newTax}
-                  onChange={(e) => setNewTax(e.target.value)}
-                  disabled={!isVerified}
+              <div className={cn("space-y-4 transition-all", !isVerified && "opacity-50 grayscale pointer-events-none")}>
+                <JurisdictionSelector
+                  selectedId={selectedJurisId}
+                  customAddress={customTaxAddr}
+                  onSelect={setSelectedJurisId}
+                  onCustomAddressChange={setCustomTaxAddr}
                 />
-                <p className="text-[9px] text-slate-400 font-mono pl-0.5">100 bps = 1% · max 10000 bps = 100%</p>
-              </div>
 
-              <div className="space-y-1">
-                <div className="flex justify-between items-center">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">{`Amount ${symbol || 'USDT'}`}</label>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">{`Bal: ${balance}`}</label>
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Tax Rate (bps)</label>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {newTax ? `${(Number(newTax) / 100).toFixed(2)}%` : '0.00%'}
+                    </span>
+                  </div>
+                  <input
+                    type="number"
+                    placeholder="300"
+                    min="0"
+                    max="10000"
+                    step="1"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all"
+                    value={newTax}
+                    onChange={(e) => setNewTax(e.target.value)}
+                    disabled={!isVerified}
+                  />
+                  <p className="text-[9px] text-slate-400 font-mono pl-0.5">100 bps = 1% · max 10000 bps = 100%</p>
                 </div>
-                <input
-                  type="number"
-                  placeholder="100.00"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-xs font-mono"
-                  value={newAmount}
-                  onChange={(e) => setNewAmount(e.target.value)}
-                  disabled={!isVerified}
-                />
+
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">{`Amount ${symbol || 'USDT'}`}</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">{`Bal: ${balance}`}</label>
+                  </div>
+                  <input
+                    type="number"
+                    placeholder="100.00"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-xs font-mono"
+                    value={newAmount}
+                    onChange={(e) => setNewAmount(e.target.value)}
+                    disabled={!isVerified}
+                  />
+                </div>
               </div>
 
               <button
@@ -587,9 +693,9 @@ export default function DashboardPage() {
             </form>
 
             {/* Compliance nudge shown below form when locked */}
-            {!isVerified && (
+            {!isVerified && !isValidAddress && (
               <p className="mt-3 text-center text-[10px] text-warning font-semibold uppercase tracking-wide animate-pulse">
-                ↓ Complete verification below to unlock
+                ↓ Enter worker address to authorize
               </p>
             )}
           </section>
@@ -611,12 +717,19 @@ export default function DashboardPage() {
                 <p className="text-xs text-slate-400 mt-1">HashKey ZK-ID Compliance Gate</p>
               </div>
 
-              {!isVerified && (
+              {!isVerified && !isLive && (
                 <button
+                  type="button"
                   onClick={handleMockVerify}
-                  className="mt-2 w-full bg-warning/10 text-warning border border-warning/20 px-4 py-2 rounded-md text-xs font-bold hover:bg-warning/20 transition-all uppercase tracking-tighter"
+                  disabled={!isValidAddress}
+                  className={cn(
+                    "mt-2 w-full px-4 py-2 rounded-md text-xs font-bold transition-all uppercase tracking-tighter",
+                    isValidAddress
+                      ? "bg-[#00FFD1]/10 text-[#00FFD1] border border-[#00FFD1]/20 hover:bg-[#00FFD1]/20 hover:shadow-[0_0_10px_rgba(0,255,209,0.2)]"
+                      : "bg-warning/10 text-warning border border-warning/20 opacity-50 cursor-not-allowed"
+                  )}
                 >
-                  Verify Now
+                  {isValidAddress ? "Verify Worker Now" : "Enter Worker Address First"}
                 </button>
               )}
             </div>
@@ -637,6 +750,7 @@ export default function DashboardPage() {
       </main>
 
       {/* Visualizations Overlay */}
+      <TransactionModal stage={modalStage} txHash={modalTxHash} errorMessage={modalError} />
       <ShredderViz isVisible={showShredder} onComplete={() => setShowShredder(false)} />
 
       {/* Footer */}
