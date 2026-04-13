@@ -9,6 +9,20 @@ import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { IZKVerifier } from "./interfaces/IZKVerifier.sol";
 import { IHashFlowEscrow } from "./interfaces/IHashFlowEscrow.sol";
 
+interface IERC3009 {
+    function transferWithAuthorization(
+        address from,
+        address to,
+        uint256 value,
+        uint256 validAfter,
+        uint256 validBefore,
+        bytes32 nonce,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
+}
+
 /**
  * @title HashFlowEscrow
  * @author HashFlow Protocol
@@ -92,7 +106,7 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
     uint16 public yieldFeeBP = 5000; // Default 50%
 
     /// @notice On-chain indexing: Maps merchant addresses to their escrow IDs.
-    mapping(address => uint256[]) public clientMilestones;
+    mapping(address => uint256[]) internal clientMilestones;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Events
@@ -263,37 +277,39 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
         uint256 _amount,
         uint16  _taxRateBP
     ) external nonReentrant returns (uint256 milestoneId) {
-        if (_worker   == address(0)) revert ZeroAddress();
-        if (_taxRecipient == address(0)) revert ZeroAddress();
-        if (_amount   == 0)          revert ZeroAmount();
-        if (_taxRateBP >= BP_DENOMINATOR) revert TaxRateTooHigh();
-
-        _checkVerification(_worker);
-
-        milestoneId = milestoneCount++;
         address sender = _msgSender();
-
-        // Pull tokens from client.
         settlementToken.safeTransferFrom(sender, address(this), _amount);
+        return _createEscrow(sender, _worker, _amount, _taxRateBP, _taxRecipient);
+    }
 
-        // Approve vault and deposit to earn yield.
-        settlementToken.forceApprove(address(vault), _amount);
-        uint256 shares = vault.deposit(_amount, address(this));
-
-        milestones[milestoneId] = Milestone({
-            amount:       _amount,
-            client:       sender,
-            worker:       _worker,
-            taxRateBP:    _taxRateBP,
-            isReleased:   false,
-            startTime:    block.timestamp,
-            shares:       shares,
-            taxRecipient: _taxRecipient
-        });
-
-        clientMilestones[sender].push(milestoneId);
-
-        emit EscrowCreated(milestoneId, sender, _worker, _amount, _taxRateBP, shares);
+    /**
+     * @notice Institutional Entry Point: One-Click Escrow Creation via EIP-3009.
+     * @dev    Executes gasless transfer via signed typed data.
+     */
+    function createEscrowWithAuth(
+        address _worker,
+        uint256 _amount,
+        uint16 _taxRateBP,
+        address _taxRecipient,
+        uint256 _validAfter,
+        uint256 _validBefore,
+        bytes32 _nonce,
+        uint8 _v,
+        bytes32 _r,
+        bytes32 _s
+    ) external nonReentrant returns (uint256 milestoneId) {
+        IERC3009(address(settlementToken)).transferWithAuthorization(
+            msg.sender,
+            address(this),
+            _amount,
+            _validAfter,
+            _validBefore,
+            _nonce,
+            _v,
+            _r,
+            _s
+        );
+        return _createEscrow(msg.sender, _worker, _amount, _taxRateBP, _taxRecipient);
     }
 
     /**
@@ -308,11 +324,10 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
      *           workerYield  = excessYield / 2
      *           platformYield= excessYield − workerYield  (handles odd wei)
      *
-     * @param _milestoneId ID of the milestone to release.
+     * @param milestoneId ID of the milestone to release.
      */
-    function releaseMilestone(uint256 _milestoneId) external nonReentrant {
-        _validateAndMarkReleased(_milestoneId);
-        _distribute(_milestoneId);
+    function releaseMilestone(uint256 milestoneId) external onlyClient(milestoneId) nonReentrant {
+        _distribute(milestoneId, _validateAndMarkReleased(milestoneId));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -495,14 +510,51 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
+     * @dev Common core logic for milestone creation.
+     */
+    function _createEscrow(
+        address _client,
+        address _worker,
+        uint256 _amount,
+        uint16 _taxRateBP,
+        address _taxRecipient
+    ) internal returns (uint256 milestoneId) {
+        if (_worker   == address(0)) revert ZeroAddress();
+        if (_taxRecipient == address(0)) revert ZeroAddress();
+        if (_amount   == 0)          revert ZeroAmount();
+        if (_taxRateBP >= BP_DENOMINATOR) revert TaxRateTooHigh();
+
+        _checkVerification(_worker);
+
+        milestoneId = milestoneCount++;
+
+        // Approve vault and deposit to earn yield.
+        settlementToken.forceApprove(address(vault), _amount);
+        uint256 shares = vault.deposit(_amount, address(this));
+
+        milestones[milestoneId] = Milestone({
+            amount:       _amount,
+            client:       _client,
+            worker:       _worker,
+            taxRateBP:    _taxRateBP,
+            isReleased:   false,
+            startTime:    block.timestamp,
+            shares:       shares,
+            taxRecipient: _taxRecipient
+        });
+
+        clientMilestones[_client].push(milestoneId);
+
+        emit EscrowCreated(milestoneId, _client, _worker, _amount, _taxRateBP, shares);
+    }
+
+    /**
      * @dev Validates release conditions and marks the milestone as released.
      * @param _milestoneId Milestone to validate.
      */
-    function _validateAndMarkReleased(uint256 _milestoneId) internal {
-        if (_milestoneId >= milestoneCount) revert InvalidMilestoneId();
-        Milestone storage m = milestones[_milestoneId];
-        if (_msgSender() != m.client) revert NotClient();
-        if (m.isReleased)           revert AlreadyReleased();
+    function _validateAndMarkReleased(uint256 _milestoneId) internal returns(Milestone storage m) {
+        m = milestones[_milestoneId];
+        if (m.isReleased) revert AlreadyReleased();
         m.isReleased = true;
     }
 
@@ -510,9 +562,7 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
      * @dev Performs the token redemption from vault and distributes all amounts.
      * @param _milestoneId Milestone whose funds are being distributed.
      */
-    function _distribute(uint256 _milestoneId) internal {
-        Milestone storage m = milestones[_milestoneId];
-
+    function _distribute(uint256 _milestoneId, Milestone storage m) internal {
         // Redeem all vault shares — receives total assets (principal + yield).
         uint256 totalAssets = vault.redeem(m.shares, address(this), address(this));
 
@@ -567,5 +617,52 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
                 revert NotVerified();
             }
         }
+    }
+}
+
+
+interface IKycSBT {
+    enum KycLevel { NONE, BASIC, ADVANCED, PREMIUM, ULTIMATE }
+    enum KycStatus { NONE, APPROVED, REVOKED }
+
+    // Core functions
+    function requestKyc(string calldata ensName) external payable;
+    function revokeKyc(address user) external;
+    function restoreKyc(address user) external;
+    function isHuman(address account) external view returns (bool, uint8);
+    function getKycInfo(address account) external view returns (
+        string memory ensName,
+        KycLevel level,
+        KycStatus status,
+        uint256 createTime
+    );
+
+    // ENS name functions
+    function approveEnsName(address user, string calldata ensName) external;
+    function isEnsNameApproved(address user, string calldata ensName) external view returns (bool);
+}
+
+contract IHashkeyKyc {
+    IKycSBT public kycSBT;
+    
+    constructor(address _kycSBT) {
+        kycSBT = IKycSBT(_kycSBT);
+    }
+    
+    function checkHuman(address account) external view returns (bool isHuman, uint8 level) {
+        return kycSBT.isHuman(account);
+    }
+    
+    function getUserKycInfo(address account) external view returns (
+        string memory ensName,
+        IKycSBT.KycLevel level,
+        IKycSBT.KycStatus status,
+        uint256 createTime
+    ) {
+        return kycSBT.getKycInfo(account);
+    }
+
+    function checkEnsNameApproval(address user, string calldata ensName) external view returns (bool) {
+        return kycSBT.isEnsNameApproved(user, ensName);
     }
 }

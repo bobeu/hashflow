@@ -10,7 +10,7 @@ const path = require('path');
 
 const FRONTEND_DIR = path.join(__dirname, '.', '/', 'src', 'contracts');
 const BROADCAST_DIR = path.join(__dirname, '../contracts/broadcast', 'Deploy.s.sol');
-const OUT_DIR = path.join(__dirname, 'out');
+const OUT_DIR = path.join(__dirname, '../contracts/out');
 
 // Ensure frontend directory exists
 if (!fs.existsSync(FRONTEND_DIR)) {
@@ -30,6 +30,7 @@ function sync() {
         } else {
             // Pick the latest chain/run (assuming only one or the user just deployed)
             const chainId = chains[0]; 
+            console.log("Chains: ", chains);
             const runPath = path.join(BROADCAST_DIR, chainId, 'run-latest.json');
             
             if (fs.existsSync(runPath)) {
@@ -54,7 +55,7 @@ function sync() {
     // 2. Sync ABIs
     const contractsToSync = [
         'HashFlowEscrow',
-        'MockERC20',
+        'MockUSDC_EIP3009',
         'MockVault',
         'MockHSP',
         'MockZKVerifier'
@@ -93,8 +94,8 @@ export const CONTRACTS = {
     abi: abis.HashFlowEscrow,
   },
   MockERC20: {
-    address: addresses.MockERC20 as \`0x\${string}\`,
-    abi: abis.MockERC20,
+    address: (addresses.MockERC20 || addresses.MockUSDC_EIP3009) as \`0x\${string}\`,
+    abi: abis.MockUSDC_EIP3009,
   },
   MockZKVerifier: {
     address: addresses.MockZKVerifier as \`0x\${string}\`,

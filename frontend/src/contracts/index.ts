@@ -12,8 +12,8 @@ export const CONTRACTS = {
     abi: abis.HashFlowEscrow,
   },
   MockERC20: {
-    address: addresses.MockERC20 as `0x${string}`,
-    abi: abis.MockERC20,
+    address: (addresses.MockERC20 || addresses.MockUSDC_EIP3009) as `0x${string}`,
+    abi: abis.MockUSDC_EIP3009,
   },
   MockZKVerifier: {
     address: addresses.MockZKVerifier as `0x${string}`,

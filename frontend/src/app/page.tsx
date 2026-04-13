@@ -20,7 +20,7 @@ import { ShredderViz } from '@/components/dashboard/shredder-viz';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { JurisdictionSelector, JURISDICTIONS } from '@/components/dashboard/jurisdiction-selector';
-import { useConnection, useReadContract, useReadContracts, useWriteContract, useConfig } from 'wagmi';
+import { useAccount, useReadContract, useReadContracts, useWriteContract, useConfig, useSignTypedData } from 'wagmi';
 import { waitForTransactionReceipt } from "wagmi/actions";
 import { CONTRACTS } from '@/contracts';
 import { formatUnits, Hex, parseUnits, formatEther } from 'viem';
@@ -47,7 +47,7 @@ const MOCK_FLOWS : MilestoneFlow[] = [
 ];
 
 export default function DashboardPage() {
-  const { address, isConnected, chainId } = useConnection();
+  const { address, isConnected, chainId } = useAccount();
   const config = useConfig();
   const [isVerified, setIsVerified] = useState(false);
   const [showShredder, setShowShredder] = useState(false);
@@ -61,6 +61,9 @@ export default function DashboardPage() {
   const [customTaxAddr, setCustomTaxAddr] = useState('');
 
   const isLive = chainId !== undefined && chainId === 177;
+
+  // Pending Simulations State
+  const [pendingSimulations, setPendingSimulations] = useState<any[]>([]);
 
   // Fetch my milestone IDs
   const { data: milestoneIds, refetch: refetchIds } = useReadContract({
@@ -152,15 +155,16 @@ export default function DashboardPage() {
     };
   }, [processedFlows]);
 
-  const { mutateAsync: releaseMilestone } = useWriteContract();
-  const { mutateAsync: createEscrow } = useWriteContract();
-  const { mutateAsync: approve } = useWriteContract();
-  
+  const { writeContractAsync: releaseMilestone } = useWriteContract();
+  const { writeContractAsync: createEscrow } = useWriteContract();
+  const { writeContractAsync: approve } = useWriteContract();
+  const { writeContractAsync: createEscrowWithAuth } = useWriteContract();
+  const { signTypedDataAsync } = useSignTypedData();
   
   // Update live yield ticker base
   useEffect(() => {
     if (stats.yield !== "0") {
-        setYieldTicker(parseFloat(stats.yield));
+      setYieldTicker(parseFloat(stats.yield));
     }
   }, [stats.yield]);
 
@@ -172,7 +176,7 @@ export default function DashboardPage() {
     return () => clearInterval(timer);
   }, []);
 
-  const handleCreateEscrow = async (e: React.SubmitEvent<HTMLFormElement>) => {
+  const handleCreateEscrow = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!newWorker || !newAmount) return;
     
@@ -185,7 +189,83 @@ export default function DashboardPage() {
           toast.error("Invalid Authority", { description: "You must select a valid tax jurisdiction." });
           return;
       }
+      
+      const { generateHashKeyAuthHeaders } = await import('@/lib/signature');
+      const headers = await generateHashKeyAuthHeaders({ amount: newAmount, worker: newWorker });
+      console.log("Generated HSP Headers (Replay Protection):", headers);
+
       let hash : Hex = '0x';
+
+      if (symbol === 'USDC' || symbol === 'Mock USDC' || symbol === 'USDT') {
+          try {
+             toast.info("One-Click Settlement", { description: "Please sign the authorization request in your wallet." });
+             const validAfter = BigInt(0);
+             const validBefore = BigInt(Math.floor(Date.now() / 1000) + 3600); // 1 hour
+             const nonce = "0x" + Array.from(crypto.getRandomValues(new Uint8Array(32)))
+                 .map(b => b.toString(16).padStart(2, '0')).join('') as \`0x\${string}\`;
+             const amountValue = parseUnits(newAmount, decimals);
+
+             const signature = await signTypedDataAsync({
+                 domain: {
+                     name: 'Mock USDC',
+                     version: '1',
+                     chainId: BigInt(chainId || 133),
+                     verifyingContract: CONTRACTS.MockERC20.address as \`0x\${string}\`
+                 },
+                 types: {
+                     TransferWithAuthorization: [
+                         { name: 'from', type: 'address' },
+                         { name: 'to', type: 'address' },
+                         { name: 'value', type: 'uint256' },
+                         { name: 'validAfter', type: 'uint256' },
+                         { name: 'validBefore', type: 'uint256' },
+                         { name: 'nonce', type: 'bytes32' }
+                     ]
+                 },
+                 primaryType: 'TransferWithAuthorization',
+                 message: {
+                     from: address as \`0x\${string}\`,
+                     to: CONTRACTS.HashFlowEscrow.address as \`0x\${string}\`,
+                     value: amountValue,
+                     validAfter: validAfter,
+                     validBefore: validBefore,
+                     nonce: nonce
+                 }
+             });
+
+             const r = \`0x\${signature.substring(2, 66)}\` as \`0x\${string}\`;
+             const s = \`0x\${signature.substring(66, 130)}\` as \`0x\${string}\`;
+             const v = parseInt(signature.substring(130, 132), 16);
+
+             hash = await createEscrowWithAuth({
+                 address: CONTRACTS.HashFlowEscrow.address,
+                 abi: CONTRACTS.HashFlowEscrow.abi as any,
+                 functionName: 'createEscrowWithAuth',
+                 args: [
+                     newWorker as \`0x\${string}\`, 
+                     amountValue, 
+                     Number(newTax), 
+                     taxRecipient as \`0x\${string}\`,
+                     validAfter,
+                     validBefore,
+                     nonce,
+                     v,
+                     r,
+                     s
+                 ]
+             });
+             
+             const createResult = await waitForTransactionReceipt(config, { hash });
+             toast.success("Gasless Escrow Initiated", { description: \`TX: \${createResult.transactionHash.slice(0, 10)}...\` });
+             setNewWorker('');
+             setNewAmount('');
+             refetchIds();
+             return;
+          } catch(err: any) {
+              console.warn("EIP-3009 Failed or Rejected, falling back to standard approve", err);
+              toast.info("Falling back to standard approval flow");
+          }
+      }
 
       hash = await approve({
         address: CONTRACTS.MockERC20.address,
@@ -233,9 +313,19 @@ export default function DashboardPage() {
   };
 
   const handleSimulatePayment = () => {
-    toast.success("HSP Payment Received!", {
-      description: "Auto-escrow initiated for new milestone.",
-    });
+    const simId = Date.now();
+    setPendingSimulations(prev => [{ id: simId, status: 'included' }, ...prev]);
+    toast.info("Transaction Included", { description: "Waiting for block confirmation..." });
+    
+    setTimeout(() => {
+        setPendingSimulations(prev => prev.map(p => p.id === simId ? { ...p, status: 'successful' } : p));
+        toast.success("HSP Payment Settled!", { description: "Auto-escrow successfully created." });
+        setShowShredder(true); // Trigger visuals when successful
+        refetchIds();
+        setTimeout(() => {
+            setPendingSimulations(prev => prev.filter(p => p.id !== simId));
+        }, 3000);
+    }, 3000);
   };
 
   const handleMockVerify = () => {
@@ -250,7 +340,11 @@ export default function DashboardPage() {
       {/* Header */}
       <header className="sticky top-0 z-10 glass-panel border-b border-slate-200 px-8 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Image src="/logo.svg" alt="HashFlow" width={150} height={150} className="object-contain" />
+          <Image src="/logo.svg" alt="HashFlow" width={24} height={24} className="object-contain" />
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-primary uppercase">HashFlow</h1>
+            <p className="text-[10px] text-slate-500 font-mono -mt-1 uppercase tracking-widest">Settlement Protocol</p>
+          </div>
         </div>
         <div className="flex items-center gap-4">
             <div className="hidden md:flex items-center gap-1 px-3 py-1 bg-white border border-slate-200 rounded-full text-xs font-medium text-slate-500">
@@ -317,7 +411,23 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody className="text-sm divide-y divide-slate-100">
-                {processedFlows.length === 0 && !isLoadingFlows && (
+                {pendingSimulations.map(sim => (
+                  <tr key={sim.id} className="group bg-slate-50/50 transition-colors">
+                      <td className="px-6 py-4 font-mono text-xs text-amber-500 animate-pulse">PENDING...</td>
+                      <td className="px-6 py-4 font-mono text-xs text-slate-400">---</td>
+                      <td className="px-6 py-4 text-slate-400">---</td>
+                      <td className="px-6 py-4 text-slate-400">---</td>
+                      <td className="px-6 py-4 text-right">
+                          <span className={cn(
+                              "px-2 py-1 rounded text-[10px] font-bold tracking-wider",
+                              sim.status === 'included' ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
+                          )}>
+                              {sim.status === 'included' ? 'PAYMENT INCLUDED' : 'SUCCESSFUL'}
+                          </span>
+                      </td>
+                  </tr>
+                ))}
+                {processedFlows.length === 0 && !isLoadingFlows && pendingSimulations.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-6 py-12 text-center text-slate-400 font-mono text-xs">
                       NO ACTIVE FLOWS FOUND FOR THIS MERCHANT

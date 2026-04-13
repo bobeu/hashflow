@@ -6,7 +6,9 @@
 !.env.example
 
 # Build Artifacts
-node_modules/
+frontend/node_modules/
+contracts/node_modules/
+contracts/cache/
 dist/
 build/
 *.lock

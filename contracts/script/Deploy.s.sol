@@ -3,6 +3,7 @@ pragma solidity 0.8.24;
 
 import { Script, console2 } from "forge-std/Script.sol";
 import { MockERC20 }        from "../src/MockERC20.sol";
+import { MockUSDC_EIP3009 } from "../src/MockUSDC_EIP3009.sol";
 import { MockVault }        from "../src/MockVault.sol";
 import { MockHSP }          from "../src/MockHSP.sol";
 import { HashFlowEscrow }   from "../src/HashFlowEscrow.sol";
@@ -47,7 +48,7 @@ contract Deploy is Script {
     // Deployed addresses — stored for verification logging.
     // ─────────────────────────────────────────────────────────────────────────
 
-    MockERC20      internal token;
+    MockUSDC_EIP3009 internal token;
     MockVault      internal vault;
     HashFlowEscrow internal escrow;
     MockHSP        internal hsp;
@@ -78,8 +79,8 @@ contract Deploy is Script {
         vm.startBroadcast();
 
         // Settlement token ──────────────────────────────────────────
-        token = new MockERC20("Mock USD", "mUSD", 6);
-        console2.log("MockERC20 deployed      :", address(token));
+        token = new MockUSDC_EIP3009();
+        console2.log("MockUSDC_EIP3009 deployed :", address(token));
 
         // ERC-4626 yield vault ─────────────────────────────────────
         vault = new MockVault(address(token), platformOwner);

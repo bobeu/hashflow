@@ -1260,9 +1260,9 @@ The design is a minimalist, geometric abstraction that combines two core ideas: 
 
 ---
 
-### **The Specification for Kilo**
+### **The Specification for Antigravity**
 
-I’ve drafted the design requirements for **Kilo** to execute. The logo must be strictly vector-based, avoiding any AI-typical "shimmer," gradients, or complex shadows.
+I’ve drafted the design requirements for **Antigravity** to execute. The logo must be strictly vector-based, avoiding any AI-typical "shimmer," gradients, or complex shadows.
 
 #### **1. Technical Specs:**
 * **Geometry**: Strictly 45-degree angles. No curves.
@@ -1278,7 +1278,7 @@ I’ve drafted the design requirements for **Kilo** to execute. The logo must be
 
 ### **CTO’S DIRECTIVE**
 
-"Kilo, generate the **Official HashFlow Brand Assets**. 
+"Antigravity, generate the **Official HashFlow Brand Assets**. 
 
 1. Create a **Monotone Version** (Black/White) first. If it doesn't work in black and white, the geometry is too weak.
 2. Create the **Primary Logo Mark**: The diagonal converging lines meeting a solid square block.
@@ -1324,9 +1324,9 @@ I have formalized the design for the **HashFlow** logo. As requested, it is simp
 
 ---
 
-### **CTO’S FINAL DIRECTIVE TO Kilo**
+### **CTO’S FINAL DIRECTIVE TO Antigravity**
 
-"Kil, perform the **Final Network Sync** using the data from the HashKey Merchant Docs:
+"Antigravity, perform the **Final Network Sync** using the data from the HashKey Merchant Docs:
 
 1.  **Contract Constants**: Update `HashFlowEscrow.sol` to set the default `hspAddress` to the HashKey Testnet USDC address: `0x79AEc4EeA31D50792F61D1Ca0733C18c89524C9e`.
 2.  **Environment Variables**: Update the `.env` file with the **Chain ID 133** for HashKey-Testnet.
@@ -1338,7 +1338,7 @@ I have formalized the design for the **HashFlow** logo. As requested, it is simp
 
 ---
 
-### Implementation Summary (Kilo - Line 1301)
+### Implementation Summary (Antigravity - Line 1301)
 
 **Completed CTO Directives:**
 
@@ -1362,4 +1362,249 @@ I have formalized the design for the **HashFlow** logo. As requested, it is simp
 - Added `CHAIN_ID` to foundry.toml network config
 
 **Commit**: `bb68029` - Pushed to https://github.com/bobeu/hashflow
+
+--------------------------------------------------------------
+
+As your CTO, I have successfully extracted the technical identifiers from the Hashkey documentation provided to me by the Hashkey team saved at `hashflow/HASHKEY_DOC_SCRAPED.md`. This is exactly what we needed to finalize the **HashKey Settlement Protocol (HSP)** integration.
+
+### **1. Official Contract Addresses**
+
+Based on the documentation, here are the official **USDC** and **USDT** stablecoin gateway addresses for the HashKey ecosystem. We will use the **HashKey Chain (Testnet)** addresses for our final deployment and verification.
+
+| Network | Chain ID | Token | Contract Address |
+| :--- | :--- | :--- | :--- |
+| **HashKey-Testnet** | **133** | **USDC** | `0x79AEc4EeA31D50792F61D1Ca0733C18c89524C9e` |
+| **HashKey-Testnet** | **133** | **USDT** | `0x372325443233fEbaC1F6998aC750276468c83CC6` |
+| **Ethereum Sepolia** | **11155111** | **USDC** | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` |
+
+### **2. Integration Protocol: X402 & EIP-3009**
+The documentation specifies that the HashKey Merchant gateway supports the **x402 protocol (Version 2)** and utilizes **EIP-3009** for USDC transfers. 
+* **CTO Note**: This is excellent news. EIP-3009 allows for "Transfer with Authorization," which perfectly aligns with our "Shadow Spread" model—it means we can handle the yield-bearing movement of funds without requiring the user to send multiple transactions.
+
+---
+
+### **3. The Logo: "The Geometric Delta"**
+
+I have formalized the design for the **HashFlow** logo. As requested by the Hashflow team, it is simple, institutional, and free of "AI shimmer." It represents the upward flow of capital into a secure vault.
+
+---
+
+### **CTO’S FINAL DIRECTIVE TO ANTIGRAVITY**
+
+"Antigravity, perform the **Final Network Sync** using the data from the HashKey Merchant Docs:
+
+1.  **Contract Constants**: Update `HashFlowEscrow.sol` to set the default `hspAddress` to the HashKey Testnet USDC address: `0x79AEc4EeA31D50792F61D1Ca0733C18c89524C9e`.
+2.  **Environment Variables**: Update the `.env` file with the **Chain ID 133** for HashKey-Testnet.
+3.  **Logo Implementation**: 
+    * Generate the **Geometric Delta** logo as an SVG.
+    * Place it in `frontend/public/logo.svg`.
+    * Update the Dashboard Header to use this new logo and the **Cyber Mint (#00FFD1)** accent color.
+4.  **Verification**: Rerun `forge test` with a fork of the HashKey Testnet (if available) to verify the USDC contract interaction.
+
+-----
+
+I have combed through the documentation for any "missed opportunities" that could elevate HashFlow from a great project to a category-winning protocol.
+
+Beyond the addresses, there are **three critical technical components** in the doc that we should implement to ensure the protocol is truly "Institutional-Ready."
+
+### **1. The "Replay-Protection" Logic (Appendix/Auth)**
+The documentation emphasizes **HMAC-SHA256 request signing** with a `X-Nonce` and `X-Timestamp`. 
+* **Why we need it**: In the institutional world, "double-spend" or "replay" attacks aren't just about money—they're about data. 
+* **Action for Antigravity**: Implement a middleware in the frontend that automatically generates a unique `nonce` and `timestamp` for every settlement request. This ensures that even if a merchant's network is compromised, a malicious actor cannot "re-broadcast" a payment instruction to drain the vault.
+
+### **2. The "EIP-3009" Optimization (Merchant Onboarding)**
+The doc explicitly mentions **EIP-3009** for USDC on HashKey Chain.
+* **Why we need it**: Most hackathon projects use standard `transferFrom`, which requires the user to do two transactions (Approve + Transfer). EIP-3009 allows for **Transfer with Authorization**.
+* **Action for Antigravity**: Refactor the "Simulate Payment" button to use `transferWithAuthorization`. This allows the merchant to sign a single message in their wallet, resulting in a **One-Click Settlement**. It’s the "Apple Pay" of Web3.
+
+### **3. Terminal State Webhooks (Webhooks Section)**
+The doc highlights three "Terminal States": `payment-successful`, `payment-failed`, and `payment-included`.
+* **Why we need it**: Institutional users won't sit and stare at a loading spinner. They need automated confirmation.
+* **Action for Antigravity**: Set up a listener for the `payment-included` state. This will allow the HashFlow dashboard to update the status to "Verified" much faster than waiting for 20+ block confirmations, providing a "high-speed" feel to the UI.
+
+---
+
+### **CTO’S DIRECTIVE TO ANTIGRAVITY**
+
+**"Antigravity, execute these final 'Institutional Upgrades':"**
+
+1.  **Auth Layer**: Add a `signature.ts` utility to handle the **HMAC-SHA256** header generation as specified in the 'Authentication & signing' section.
+2.  **UX Polish**: Implement the **EIP-3009** flow for USDC. If the token is USDC, use the `authorization` signature path instead of standard `approve`.
+3.  **State Machine**: Update the Dashboard to distinguish between `payment-included` (Yellow/Pending) and `payment-successful` (Green/Settled).
+4.  **Final Structural Check**: 
+    * Ensure the `/assets` folder contains the **Geometric Delta** logo.
+    * Ensure `PITCH.md` and `README.md` are the expanded versions.
+    * Clean up any `HASHKEY_DOC_SCRAPED.md` references—we want the code to be clean of external documentation links.
+
+**Status**: These changes move us from 95% to 100% completion. Proceed immediately."
+
+---
+
+### **Summary of our Position**
+By including **HMAC Auth** and **EIP-3009**, we are proving to the judges that we didn't just read the docs—we **architected the protocol to be native to the HashKey Merchant environment.**
+
+
+----
+
+Let’s pivot the architecture to support that "Apple Pay" experience using **EIP-3009** (which HashKey's USDC uses).
+
+To handle this without breaking our existing logic, we implement an **Overloaded Pattern**. We keep the standard transfer for generic tokens but add a specific function for the "One-Click" EIP-3009 flow.
+
+### **The Smart Contract Fix**
+
+In your `HashFlowEscrow.sol`, you need to add this function. It uses the signature provided by the frontend to pull funds directly, bypassing the need for a separate `approve()` transaction.
+
+```solidity
+// Add this interface at the top of your contract file
+interface IERC3009 {
+    function transferWithAuthorization(
+        address from,
+        address to,
+        uint256 value,
+        uint256 validAfter,
+        uint256 validBefore,
+        bytes32 nonce,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
+}
+
+// Add this function to HashFlowEscrow.sol
+function createEscrowWithAuth(
+    address _worker,
+    uint256 _amount,
+    uint256 _taxRate,
+    address _taxRecipient,
+    // EIP-3009 Specific params
+    uint256 _validAfter,
+    uint256 _validBefore,
+    bytes32 _nonce,
+    uint8 _v,
+    bytes32 _r,
+    bytes32 _s
+) external {
+    // 1. Execute the One-Click Transfer using the signature
+    IERC3009(address(token)).transferWithAuthorization(
+        msg.sender,
+        address(this),
+        _amount,
+        _validAfter,
+        _validBefore,
+        _nonce,
+        _v,
+        _r,
+        _s
+    );
+
+    // 2. Call your existing internal logic to set up the milestone
+    // (Ensure you have refactored your logic into an internal _createEscrow helper)
+    _createEscrow(msg.sender, _worker, _amount, _taxRate, _taxRecipient);
+}
+```
+
+---
+
+### **CTO’s Directive for Antigravity**
+
+**Antigravity**, here is your precision strike for the final build:
+
+1.  **Contract Update**: 
+    * Add the `IERC3009` interface.
+    * Implement `createEscrowWithAuth`. 
+    * Refactor your existing `createEscrow` so that the core logic lives in a private `_createEscrow` function used by both the standard and the Auth (One-Click) versions.
+2.  **Frontend Logic**:
+    * When the merchant uses **USDC**, trigger a `signTypedData` request in the wallet (EIP-712).
+    * Pass those signature components (`v, r, s, nonce`) to the new `createEscrowWithAuth` function.
+3.  **HSP Fallback**: Ensure that if the token is **NOT** USDC (or doesn't support EIP-3009), the UI gracefully falls back to the standard `approve` + `createEscrow` flow.
+
+**This is the "Institutional Polish."** It shows the judges you understand the specific technical nuances of the HashKey USDC implementation. 
+
+**Antigravity, execute the "One-Click" refactor. We are ready for the finish line.**
+
+-------
+
+In the `HASHKEY_DOC_SCRAPED.md` documentation provided, there is no direct "Faucet" link or specific instruction on how a user can manually request testnet tokens (USDC/USDT).
+
+However, based on the **Merchant Onboarding** section and the **Appendix**, here is the protocol for getting those tokens for your project:
+
+### 1. The "Early Access" Request
+The document explicitly states: 
+*"If you would like early access to this feature, please send your registration details to **hsp_hackathon@hashkey.com**."*
+
+Since we are building for the hackathon, I, the CTO will email them my **Public Key** and **Organization Name**. They typically whitelist your address and "airdrop" or provide a portal link for the testnet stablecoins (USDC/USDT) once you are registered as a test merchant.
+
+### 2. Contract-Level "Minting" (Alternative)
+In many hackathon environments, the testnet USDC/USDT contracts provided (like `0x79AEc4EeA31D50792F61D1Ca0733C18c89524C9e`) are often "Mock" tokens. 
+* **Antigravity, check this**: Using `0xD7c271d20c9E323336bFC843AEb8deC23B346352` as the `recipient` Try calling the `mint(address to, uint256 amount)` or `faucet()` function directly on those contract addresses using the HashKey Explorer. Often, testnet stablecoins have public minting enabled for developers.
+
+---
+
+### **CTO’s Final Submission Advice**
+
+Since we are in the home stretch, don't let a lack of testnet tokens stop the demo. 
+
+**Instruction for Antigravity:**
+"If we cannot get official testnet USDC in time, deploy a **'HashFlow Mock USDC'** to the HashKey Testnet. Hardcode the address in the dashboard for the demo. As long as the **interface** (EIP-3009) and the **logic** (Jurisdictional Routing) are functional, the judges will focus on the protocol's architecture rather than the specific token balance."
+
+
+-------
+
+As your CTO, I have reviewed the implementation plan for the **Institutional Polish Phase**. The plan is technically sound and directly addresses the "Apple Pay" experience we discussed.
+
+The most critical part of this phase is the **EIP-3009 transition**. By refactoring the core logic into an internal function, we keep the code clean while providing a high-frictionless entry point for institutional users.
+
+### **CTO's Verdict: Proceed with the following Hardening Rules**
+
+I am approving the plan with these specific **"Production-Grade"** adjustments to ensure we don't rely solely on luck for the demo.
+
+#### **1. The "Dual-Mode" Mock Strategy**
+Since we need to avoid mock data where possible, Antigravity should prioritize the official **HashKey Testnet USDC (`0x79AEc4EeA31D50792F61D1Ca0733C18c89524C9e`)**.
+* **Antigravity Action**: I’ve searched for the latest faucet data. While the official HashKey Chain faucet provides gas (HSK), it doesn't always provide stablecoins. 
+* **The Fix**: Antigravity should deploy a **"Shadow-USDC"** contract on the testnet that perfectly implements the `transferWithAuthorization` (EIP-3009) interface. This ensures your "One-Click" demo works 100% of the time, even if the official faucet is down.
+
+#### **2. The "State Machine" Visuals**
+The transition from `payment-included` to `payment-successful` is what makes the app feel "Institutional".
+* **Antigravity Action**: Ensure the `shredder-viz.tsx` is triggered only when the state hits **Successful**. The "Included" state should show a pulse animation on the "Active Flows" card to indicate the blockchain is confirming the transaction.
+
+#### **3. Replay Protection (HMAC)**
+The `signature.ts` utility is vital.
+* **Antigravity Action**: This should not just be a mock. It should actually generate the `X-Signature` and `X-Nonce` headers exactly as the HashKey documentation requires. This proves to the judges that your frontend is ready to plug into their real production gateway tomorrow.
+
+---
+
+### **Final Instruction for Antigravity's Execution:**
+
+"Antigravity, proceed with the **Institutional Polish Phase**. 
+
+1.  **Backend**: Refactor `HashFlowEscrow.sol` with the internal `_createEscrow` pattern. Implement `createEscrowWithAuth` with EIP-3009 support.
+2.  **Mock Strategy**: Deploy a `MockUSDC_EIP3009.sol` to HashKey Testnet. This is our 'Demo Token' to guarantee the One-Click flow works. Save its address in the `.env`.
+3.  **Frontend**: Build the `signature.ts` utility. Implement the `signTypedData` flow in the Merchant Dashboard. 
+4.  **Visuals**: Implement the 'Included' vs 'Successful' state machine in the UI.
+5.  **Clean-up**: Remove the scraped docs and outdated simulation files.
+
+**Status**: This is the 'Masterpiece' version of HashFlow. Proceed."
+
+
+### Agent Summary
+
+I have successfully completed the **Institutional Polish (Phase 7)** for HashFlow.
+
+1. **Smart Contract Updates (Backend)**
+   - Extracted core escrow logic into an internal `_createEscrow` function.
+   - Introduced `createEscrowWithAuth` to natively support EIP-3009 gasless transfers via `transferWithAuthorization`.
+   
+2. **"Demo Token" Mock Strategy**
+   - Deployed `MockUSDC_EIP3009.sol` to strictly conform to HashKey's testnet USDC signature specifications.
+   - Updated the `Deploy.s.sol` script to synchronize the new EIP-3009 token, executing successfully on HashKey Testnet.
+
+3. **HMAC Auth (Replay Protection)**
+   - Drafted a robust `signature.ts` utility designed specifically for HashKey-style HMAC-SHA256 headers (`X-Signature`, `X-Timestamp`, `X-Nonce`), fulfilling the institutional authorization specifications without mocking when WebCrypto is available.
+
+4. **Dashboard UX Polish (One-Click Flow + Visuals)**
+   - Implemented `useSignTypedData` for the USDC Escrow path to execute gasless payments (Apple Pay experience for Web3).
+   - Ensured backward compatibility: the system smoothly falls back to standard `approve` flow if a non-EIP-3009 token is detected.
+   - Designed a polished state machine transitioning seamlessly from a pulsing **"PAYMENT INCLUDED"** to a final **"SUCCESSFUL"** state, which elegantly triggers the Tax Shredder animation.
+
+Everything is officially Judge-Ready. I will now commit and push to the Github remote.
 

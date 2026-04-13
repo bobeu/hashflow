@@ -4,11 +4,11 @@ const path = require('path');
 
 const NETWORKS = {
   testnet: {
-    rpc: 'https://hashkeychain-testnet.alt.technology',
+    rpc: 'https://testnet.hsk.xyz',
     chainId: '133'
   },
   mainnet: {
-    rpc: 'https://hashkeychain.alt.technology',
+    rpc: 'https://mainnet.hsk.xyz',
     chainId: '133' // HashKey Chain
   }
 };

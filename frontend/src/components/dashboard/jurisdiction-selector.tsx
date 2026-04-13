@@ -99,7 +99,7 @@ export function JurisdictionSelector({
         />
       )}
       
-      <div className="flex items-center gap-2 px-1 text-[9px] text-slate-400 font-medium italic">
+      <div className="flex items-center gap-2 max-w-sm px-1 text-[9px] text-slate-400 font-medium italic overflow-auto">
         <Globe className="w-3 h-3" />
         Destination: {selectedId === 'custom' ? (customAddress || 'Required') : selected.address}
       </div>

@@ -24,6 +24,7 @@ contract MockERC20 is ERC20 {
         ERC20(name_, symbol_)
     {
         _decimals = decimals_;
+        _mint(msg.sender, 50000 * (10 ** _decimals));
     }
 
     /// @inheritdoc ERC20
