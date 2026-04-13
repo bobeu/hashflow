@@ -298,7 +298,9 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
         bytes32 _r,
         bytes32 _s
     ) external nonReentrant returns (uint256 milestoneId) {
-        IERC3009(address(settlementToken)).transferWithAuthorization(
+        // Wrap the EIP-3009 transfer so callers receive a descriptive revert reason
+        // instead of the opaque "unknown reason" from the USDC contract.
+        try IERC3009(address(settlementToken)).transferWithAuthorization(
             msg.sender,
             address(this),
             _amount,
@@ -308,7 +310,15 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
             _v,
             _r,
             _s
-        );
+        ) {
+            // transfer succeeded – proceed to create the escrow
+        } catch Error(string memory reason) {
+            // Bubble up the original require() string from the USDC contract
+            revert(string(abi.encodePacked("EIP-3009: ", reason)));
+        } catch {
+            revert("EIP-3009: transferWithAuthorization failed (check domain, nonce, or timestamp)");
+        }
+
         return _createEscrow(msg.sender, _worker, _amount, _taxRateBP, _taxRecipient);
     }
 

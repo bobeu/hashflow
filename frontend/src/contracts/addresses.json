@@ -1,6 +1,6 @@
 {
-  "MockUSDC_EIP3009": "0xcfad673d8bcb28f3d2fa60d8005c742973b1e5f3",
-  "MockVault": "0x5c4ed4e4be6ac6bac6f913da027f5c4ef3b9ce45",
-  "HashFlowEscrow": "0xa27c3d47f40bec19d3b3ee0ff9acc59160145bae",
-  "MockZKVerifier": "0x747fa2a48c1e7af5d984b8c48c43c193a95431da"
+  "MockUSDC_EIP3009": "0x8790456083e0edaa309c9e555169e6a3ab126174",
+  "MockVault": "0x22fcfa87b4ea333fdf8ed26adc597d7f8662bb85",
+  "HashFlowEscrow": "0x9890feb714834586aabd839f3395f017c4ba5bfe",
+  "MockZKVerifier": "0x63ff272e1802ae87cf704acdde0d654209e164e1"
 }

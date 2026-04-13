@@ -3,8 +3,10 @@
  * DO NOT EDIT MANUALLY
  */
 
-import addresses from './addresses.json';
+import _addresses from './addresses.json';
 import abis from './abis.json';
+
+const addresses = _addresses as Record<string, string>;
 
 export const CONTRACTS = {
   HashFlowEscrow: {

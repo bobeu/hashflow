@@ -9,6 +9,9 @@ contracts/broadcast/
 contracts/.env
 frontend/.env
 
+# ── Merchant key material (NEVER commit private keys) ───────────────────────
+contracts/secrets/
+
 # ── OS / IDE cruft ────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
