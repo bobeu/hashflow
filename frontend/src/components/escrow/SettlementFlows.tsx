@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { History, Zap, Globe, ArrowUpRight, Search } from 'lucide-react';
+import { History, Zap, Search } from 'lucide-react';
 import { useHashFlow } from '@/context/HashFlowContext';
 import { formatUnits } from 'viem';
 import { cn } from '@/lib/utils';
@@ -62,7 +62,7 @@ export function SettlementFlows() {
                 <td className="px-6 py-4">
                   <span className="text-accent font-mono text-xs flex items-center gap-1 font-bold">
                     <Zap className="w-3 h-3" />
-                    {formatUnits(flow.yield, 6)}
+                    {parseFloat(formatUnits(flow.yield, 6)).toFixed(6)} {stats.symbol}
                   </span>
                 </td>
                 <td className="px-6 py-4 text-right">

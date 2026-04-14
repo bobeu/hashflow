@@ -2441,3 +2441,32 @@ Executed a comprehensive architectural sweep to transition from static simulatio
 2.  **DoraHacks Prep**: Finalize the project pitch deck with screenshots of the "ticking" yield.
 3.  **Final Verification**: Conduct a final end-to-end test of the EIP-3009 gasless flow with the modular architecture.
 
+-------------------------------------------------------------
+
+### Implementation Summary (Kilo - Line 1301 onwards)
+
+**Completed Tasks:**
+
+1. **Modal Height Fix** (`MilestoneDetailModal.tsx`):
+   - Fixed the modal covering the whole page by adding `max-h-[calc(100vh-4rem)]`, `my-8`, and `overflow-y-auto` classes
+   - Modal now stays centered with proper margins and scrolls when content overflows
+
+2. **ShredderViz Real Data Integration** (`shredder-viz.tsx`):
+   - Added `flow` prop to receive milestone data
+   - `WORKER (NET)`: Now displays `principal - tax` amount after tax deduction
+   - `TAX (X%)`: Now displays correct tax percentage and amount based on `taxBP`
+   - `PLATFORM (0%)`: Remains unchanged
+
+3. **Context State Management** (`HashFlowContext.tsx`):
+   - Added `selectedFlowForShredder` state to track the flow being released
+   - Added `setSelectedFlowForShredder` setter function
+
+4. **MilestoneDetailModal Integration**:
+   - Updated to pass the selected flow to context when releasing milestone
+
+5. **SettlementFlows Yield Display Fix** (`SettlementFlows.tsx`):
+   - Changed yield formatting from `formatUnits(flow.yield, 6)` to `parseFloat(formatUnits(flow.yield, 6)).toFixed(6)`
+   - Now displays small decimal values like 0.000145 correctly
+
+**Commit**: Pushed to https://github.com/bobeu/hashflow
+

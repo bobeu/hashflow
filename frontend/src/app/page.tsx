@@ -16,8 +16,8 @@ import { TransactionModal } from '@/components/TransactionModal';
 import { ShredderViz } from '@/components/dashboard/shredder-viz';
 
 export default function DashboardPage() {
-  const { isConnected, chainId } = useAccount();
-  const { modal, showShredder, setShowShredder, refresh } = useHashFlow();
+  const { chainId } = useAccount();
+  const { modal, showShredder, setShowShredder, refresh, selectedFlowForShredder, setSelectedFlowForShredder } = useHashFlow();
 
   const isLive = chainId !== undefined && chainId === 177;
 
@@ -97,7 +97,8 @@ export default function DashboardPage() {
       />
       <ShredderViz 
         isVisible={showShredder} 
-        onComplete={() => setShowShredder(false)} 
+        flow={selectedFlowForShredder}
+        onComplete={() => { setShowShredder(false); setSelectedFlowForShredder(null); }} 
       />
 
       {/* Footer */}

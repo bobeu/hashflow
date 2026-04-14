@@ -24,6 +24,8 @@ interface HashFlowContextType {
   isLoading: boolean;
   showShredder: boolean;
   setShowShredder: (v: boolean) => void;
+  selectedFlowForShredder: MilestoneFlow | null;
+  setSelectedFlowForShredder: (flow: MilestoneFlow | null) => void;
 
   // Modal State (Global for easier orchestration)
   modal: {
@@ -48,6 +50,7 @@ export function HashFlowProvider({ children }: { children: React.ReactNode }) {
   const { signTypedDataAsync } = useSignTypedData();
 
   const [showShredder, setShowShredder] = useState(false);
+  const [selectedFlowForShredder, setSelectedFlowForShredder] = useState<MilestoneFlow | null>(null);
 
   // Global UI States
   const [modalStage, setModalStage] = useState<TransactionStage>('idle');
@@ -331,7 +334,9 @@ export function HashFlowProvider({ children }: { children: React.ReactNode }) {
       mockVerify,
       refresh,
       showShredder,
-      setShowShredder
+      setShowShredder,
+      selectedFlowForShredder,
+      setSelectedFlowForShredder
     }}>
       {children}
     </HashFlowContext.Provider>

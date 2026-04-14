@@ -2,14 +2,26 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
+import { formatUnits } from 'viem';
+import { MilestoneFlow } from '@/lib/utils';
 
 interface ShredderVizProps {
   isVisible: boolean;
   onComplete?: () => void;
+  flow?: MilestoneFlow | null;
 }
 
-export function ShredderViz({ isVisible, onComplete }: ShredderVizProps) {
+export function ShredderViz({ isVisible, onComplete, flow }: ShredderVizProps) {
   if (!isVisible) return null;
+
+  const principal = flow?.amount || 0n;
+  const taxBP = flow?.taxBP || 0;
+  const taxAmount = (principal * BigInt(taxBP)) / 10000n;
+  const workerNet = principal - taxAmount;
+
+  const workerLabel = flow ? `WORKER (NET) $${formatUnits(workerNet, 6)}` : 'WORKER (NET)';
+  const taxLabel = flow ? `TAX (${taxBP / 100}%) $${formatUnits(taxAmount, 6)}` : 'TAX (80%)';
+  const platformLabel = 'PLATFORM (0%)';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary/20 backdrop-blur-sm">
@@ -63,10 +75,10 @@ export function ShredderViz({ isVisible, onComplete }: ShredderVizProps) {
                 animate={{ opacity: 1 }}
                 transition={{ delay: 1.8 }}
             >
-                WORKER (NET)
+                {workerLabel}
             </motion.text>
 
-            {/* Path 2: Gov (80% Tax) */}
+            {/* Path 2: Gov (Tax) */}
             <motion.line 
                 x1="220" y1="100" x2="350" y2="100" 
                 stroke="#F59E0B" strokeWidth="2"
@@ -80,10 +92,10 @@ export function ShredderViz({ isVisible, onComplete }: ShredderVizProps) {
                 animate={{ opacity: 1 }}
                 transition={{ delay: 2 }}
             >
-                GOVERNANCE (80%)
+                {taxLabel}
             </motion.text>
 
-            {/* Path 3: Platform (20% Yield) */}
+            {/* Path 3: Platform (Yield) */}
             <motion.line 
                 x1="220" y1="100" x2="350" y2="140" 
                 stroke="#001B3D" strokeWidth="2"
@@ -97,7 +109,7 @@ export function ShredderViz({ isVisible, onComplete }: ShredderVizProps) {
                 animate={{ opacity: 1 }}
                 transition={{ delay: 2.2 }}
             >
-                PLATFORM (20%)
+                {platformLabel}
             </motion.text>
           </svg>
         </div>

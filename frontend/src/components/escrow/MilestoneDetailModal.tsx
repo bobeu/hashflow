@@ -3,9 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ExternalLink, Zap, Shield, TrendingUp, Landmark } from 'lucide-react';
-import { MilestoneFlow, useHashFlow } from '@/context/HashFlowContext';
+import { useHashFlow } from '@/context/HashFlowContext';
 import { formatUnits, parseUnits } from 'viem';
-import { cn } from '@/lib/utils';
+import { cn, MilestoneFlow } from '@/lib/utils';
 
 interface Props {
   flow: MilestoneFlow | null;
@@ -13,7 +13,7 @@ interface Props {
 }
 
 export function MilestoneDetailModal({ flow, onClose }: Props) {
-  const { releaseMilestone, stats } = useHashFlow();
+  const { releaseMilestone, stats, setSelectedFlowForShredder } = useHashFlow();
   const [liveYield, setLiveYield] = useState(0n);
 
   useEffect(() => {
@@ -43,7 +43,7 @@ export function MilestoneDetailModal({ flow, onClose }: Props) {
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="bg-white border-2 border-primary rounded-xl overflow-hidden max-w-lg w-full shadow-[0_20px_50px_rgba(0,0,0,0.3)]"
+          className="bg-white border-2 border-primary rounded-xl overflow-hidden max-w-lg w-full max-h-[calc(100vh-1rem)] my-4 shadow-[0_20px_50px_rgba(0,0,0,0.3)]"
         >
           {/* Header */}
           <div className="bg-primary p-6 flex items-center justify-between text-white">
@@ -56,7 +56,7 @@ export function MilestoneDetailModal({ flow, onClose }: Props) {
             </button>
           </div>
 
-          <div className="p-8 space-y-8">
+          <div className="p-8 space-y-8 overflow-y-auto max-h-[calc(100vh-6rem)]">
             {/* Value Breakdown */}
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-slate-50 p-4 border border-slate-100 rounded-lg">
@@ -102,6 +102,7 @@ export function MilestoneDetailModal({ flow, onClose }: Props) {
             {/* Actions */}
             <button
               onClick={() => {
+                setSelectedFlowForShredder(flow);
                 releaseMilestone(flow.id);
                 onClose();
               }}
