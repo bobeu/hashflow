@@ -63,14 +63,14 @@ export function ShredderViz({ isVisible, onComplete, flow }: ShredderVizProps) {
 
             {/* Path 1: Worker (Net) */}
             <motion.line 
-                x1="220" y1="100" x2="350" y2="60" 
+                x1="220" y1="100" x2="310" y2="60" 
                 stroke="#10B981" strokeWidth="2"
                 initial={{ pathLength: 0 }}
                 animate={{ pathLength: 1 }}
                 transition={{ delay: 1, duration: 0.8 }}
             />
             <motion.text 
-                x="360" y="55" fontSize="10" fontWeight="bold" fill="#10B981"
+                x="320" y="55" fontSize="10" fontWeight="bold" fill="#10B981"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 1.8 }}
@@ -80,14 +80,14 @@ export function ShredderViz({ isVisible, onComplete, flow }: ShredderVizProps) {
 
             {/* Path 2: Gov (Tax) */}
             <motion.line 
-                x1="220" y1="100" x2="350" y2="100" 
+                x1="220" y1="100" x2="310" y2="100" 
                 stroke="#F59E0B" strokeWidth="2"
                 initial={{ pathLength: 0 }}
                 animate={{ pathLength: 1 }}
                 transition={{ delay: 1.2, duration: 0.8 }}
             />
             <motion.text 
-                x="360" y="105" fontSize="10" fontWeight="bold" fill="#F59E0B"
+                x="320" y="105" fontSize="10" fontWeight="bold" fill="#F59E0B"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 2 }}
@@ -97,14 +97,14 @@ export function ShredderViz({ isVisible, onComplete, flow }: ShredderVizProps) {
 
             {/* Path 3: Platform (Yield) */}
             <motion.line 
-                x1="220" y1="100" x2="350" y2="140" 
+                x1="220" y1="100" x2="310" y2="140" 
                 stroke="#001B3D" strokeWidth="2"
                 initial={{ pathLength: 0 }}
                 animate={{ pathLength: 1 }}
                 transition={{ delay: 1.4, duration: 0.8 }}
             />
              <motion.text 
-                x="360" y="145" fontSize="10" fontWeight="bold" fill="#001B3D"
+                x="320" y="145" fontSize="10" fontWeight="bold" fill="#001B3D"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 2.2 }}

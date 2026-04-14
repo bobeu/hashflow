@@ -17,9 +17,9 @@ export function EscrowForm() {
   const [customTaxAddr, setCustomTaxAddr] = useState('');
   const [isVerified, setIsVerified] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const taxRecipient = jurisId === 'custom' ? customTaxAddr : '0x090624e647aE1032Ad50624C78E0a7BA7B7EC6F9'; // Placeholder or find from JURISDICTIONS
+    const taxRecipient = jurisId === 'custom' ? customTaxAddr : '0xF1450c7F1CADE2Ff5Ec70e2Ffb191107352F4720'; 
     // Better: pull from the selector or logic
     await createEscrow({ worker, amount, taxBP: Number(taxBP), taxRecipient });
     setWorker('');

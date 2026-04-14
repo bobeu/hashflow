@@ -8,19 +8,19 @@ export const JURISDICTIONS = [
   { 
     id: 'hk', 
     name: 'Hong Kong IRD', 
-    address: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
+    address: '0xF1450c7F1CADE2Ff5Ec70e2Ffb191107352F4720',
     flag: '🇭🇰'
   },
   { 
     id: 'sg', 
     name: 'Singapore IRAS', 
-    address: '0x947edA225c949704e6E875fA2a93946059639535',
+    address: '0x4045FD2c1ce56Fe5C50c6F631EC5df8e6bcc4b00',
     flag: '🇸🇬'
   },
   { 
     id: 'uae', 
     name: 'UAE FTA Portal', 
-    address: '0x84d3E17D77F15C6Ac75CE978AcC8C80Ec6B6A50E',
+    address: '0xa1f70ffA4322E3609dD905b41f17Bf3913366bC1',
     flag: '🇦🇪'
   },
   { 

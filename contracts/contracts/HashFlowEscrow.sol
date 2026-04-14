@@ -103,7 +103,7 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
     address public zkVerifier;
 
     /// @notice Percentage of yield (interest) taken as platform fee (Basis Points).
-    uint16 public yieldFeeBP = 5000; // Default 50%
+    uint16 public yieldFeeBP = 3000; // Default 30%
 
     /// @notice Whether to use Demo or live verifier
     bool public useDemo;
@@ -341,7 +341,8 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
      * @param milestoneId ID of the milestone to release.
      */
     function releaseMilestone(uint256 milestoneId) external onlyClient(milestoneId) nonReentrant {
-        _distribute(milestoneId, _validateAndMarkReleased(milestoneId));
+        _validateAndMarkReleased(milestoneId);
+        _distribute(milestoneId);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -380,8 +381,8 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
         if (_taxRateBP >= BP_DENOMINATOR) revert TaxRateTooHigh();
 
         _checkVerification(_worker);
-
-        milestoneId = milestoneCount++;
+        milestoneCount ++;
+        milestoneId = milestoneCount;
 
         // Pull tokens from the HSP contract (which acts as the client proxy).
         settlementToken.safeTransferFrom(_msgSender(), address(this), _amount);
@@ -481,8 +482,7 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
      */
     function milestoneValue(uint256 _milestoneId) external view returns (uint256 assets) {
         if (_milestoneId >= milestoneCount) revert InvalidMilestoneId();
-        Milestone storage m = milestones[_milestoneId];
-        assets = vault.convertToAssets(m.shares);
+        assets = vault.convertToAssets(milestones[_milestoneId].shares);
     }
 
     /**
@@ -504,8 +504,10 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
      * @return totalLiability Total assets currently set aside as tax.
      */
     function getTotalTaxLiability(address _client) external view returns (uint256 totalLiability) {
-        for (uint256 i = 0; i < milestoneCount; i++) {
-            Milestone storage m = milestones[i];
+        uint256[] memory ms = this.getMyMilestones(_client);
+        for (uint256 i = 0; i < ms.length; i++) {
+            uint milestoneId = ms[i];
+            Milestone storage m = milestones[milestoneId];
             if (m.client == _client && !m.isReleased) {
                 totalLiability += (m.amount * m.taxRateBP) / BP_DENOMINATOR;
             }
@@ -533,14 +535,14 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
         uint16 _taxRateBP,
         address _taxRecipient
     ) internal returns (uint256 milestoneId) {
-        if (_worker   == address(0)) revert ZeroAddress();
+        if (_worker == address(0)) revert ZeroAddress();
         if (_taxRecipient == address(0)) revert ZeroAddress();
-        if (_amount   == 0)          revert ZeroAmount();
+        if (_amount == 0) revert ZeroAmount();
         if (_taxRateBP >= BP_DENOMINATOR) revert TaxRateTooHigh();
 
         _checkVerification(_worker);
-
-        milestoneId = milestoneCount++;
+        milestoneCount ++;
+        milestoneId = milestoneCount;
 
         // Approve vault and deposit to earn yield.
         settlementToken.forceApprove(address(vault), _amount);
@@ -566,8 +568,8 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
      * @dev Validates release conditions and marks the milestone as released.
      * @param _milestoneId Milestone to validate.
      */
-    function _validateAndMarkReleased(uint256 _milestoneId) internal returns(Milestone storage m) {
-        m = milestones[_milestoneId];
+    function _validateAndMarkReleased(uint256 _milestoneId) internal {
+        Milestone storage m = milestones[_milestoneId];
         if (m.isReleased) revert AlreadyReleased();
         m.isReleased = true;
     }
@@ -576,31 +578,32 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
      * @dev Performs the token redemption from vault and distributes all amounts.
      * @param _milestoneId Milestone whose funds are being distributed.
      */
-    function _distribute(uint256 _milestoneId, Milestone storage m) internal {
+    function _distribute(uint256 _milestoneId) internal {
+        Milestone storage m = milestones[_milestoneId];
         // Redeem all vault shares — receives total assets (principal + yield).
         uint256 totalAssets = vault.redeem(m.shares, address(this), address(this));
 
-        uint256 principal   = m.amount;
-        uint256 tax         = (principal * m.taxRateBP) / BP_DENOMINATOR;
+        uint256 principal = m.amount;
+        uint256 tax = (principal * m.taxRateBP) / BP_DENOMINATOR;
         uint256 workerPayout = principal - tax;
 
         // Excess yield calculations.
-        uint256 totalYield   = totalAssets > principal ? totalAssets - principal : 0;
+        uint256 totalYield = totalAssets > principal ? totalAssets - principal : 0;
         uint256 platformYield = 0;
         uint256 workerYield  = 0;
 
         if (totalYield > 0) {
             platformYield = (totalYield * yieldFeeBP) / BP_DENOMINATOR;
-            workerYield   = totalYield - platformYield;
+            workerYield = totalYield - platformYield;
         }
 
         // ── Distributions ────────────────────────────────────────────────────
         
-        // 1. Government: Sacrosanct 100% Tax remittance to the milestone-specific recipient.
+        // Government: Sacrosanct 100% Tax remittance to the milestone-specific recipient.
         settlementToken.safeTransfer(m.taxRecipient, tax);
         emit TaxRemitted(_milestoneId, tax, m.taxRecipient);
 
-        // 2. Worker: net principal + share of yield.
+        // Worker: net principal + share of yield.
         settlementToken.safeTransfer(m.worker, workerPayout + workerYield);
 
         // 3. Platform: Service fee from yield only.

@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ExternalLink, Zap, Shield, TrendingUp, Landmark } from 'lucide-react';
+import { X, UserCheck, Zap, Shield, TrendingUp, Landmark } from 'lucide-react';
 import { useHashFlow } from '@/context/HashFlowContext';
-import { formatUnits, parseUnits } from 'viem';
+import { formatUnits } from 'viem';
 import { cn, MilestoneFlow } from '@/lib/utils';
 
 interface Props {
@@ -86,6 +86,17 @@ export function MilestoneDetailModal({ flow, onClose }: Props) {
                 <DetailRow label="Jurisdictional Tax" value={`$${formatUnits(tax, 6)}`} sub={`${flow.taxBP/100}% Remittance`} color="text-amber-600" />
                 <DetailRow label="Protocol Revenue" value={`$${formatUnits(protocolFee, 6)}`} sub="Service Portion" color="text-primary" />
               </div>
+            </div>
+
+            {/* Tax Destination */}
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-slate-500 uppercase">Tax Destination</span>
+                <div className={`flex items-center gap-1 text-[10px] ${flow.isReleased? 'text-emerald-600' : 'text-red-300'} font-bold`}>
+                  <UserCheck className="w-3 h-3" /> {`${flow.isReleased ? 'REMITTED' : 'PENDING REMITTANCE'}`}
+                </div>
+              </div>
+              <p className="text-xs font-mono break-all text-slate-400">{flow.taxRecipient}</p>
             </div>
 
             {/* Destination Verification */}

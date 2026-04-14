@@ -40,6 +40,7 @@ interface HashFlowContextType {
   releaseMilestone: (id: number) => Promise<void>;
   mockVerify: (worker: string) => Promise<void>;
   refresh: () => void;
+  syncSimulatedYield: () => Promise<void>;
 }
 
 const HashFlowContext = createContext<HashFlowContextType | undefined>(undefined);
@@ -152,6 +153,17 @@ export function HashFlowProvider({ children }: { children: React.ReactNode }) {
     refetchFlows();
   }, [refetchIds, refetchMeta, refetchFlows]);
 
+  // Sync Interval: Ticking the yield growth every 5 seconds
+  useEffect(() => {
+    if (!address) return;
+    const interval = setInterval(() => {
+      // Background sync - we don't await or toast here to avoid UI spam
+      // but the contract call will trigger the growth minting
+      syncSimulatedYield().catch(console.error);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [address]);
+
   // Watch for events to auto-refresh
   useWatchContractEvent({
     address: CONTRACTS.HashFlowEscrow.address,
@@ -173,6 +185,21 @@ export function HashFlowProvider({ children }: { children: React.ReactNode }) {
   const { writeContractAsync: writeApprove } = useWriteContract();
   const { writeContractAsync: writeRelease } = useWriteContract();
   const { writeContractAsync: writeVerify } = useWriteContract();
+  const { writeContractAsync: writeSync } = useWriteContract();
+
+  const syncSimulatedYield = async () => {
+    try {
+      const hash = await writeSync({
+        address: CONTRACTS.MockVault.address,
+        abi: CONTRACTS.MockVault.abi as any,
+        functionName: 'syncSimulatedYield',
+      });
+      await waitForTransactionReceipt(config, { hash });
+      refresh();
+    } catch (err) {
+      console.warn("Sync failed (possibly user rejected or already synced):", err);
+    }
+  };
 
   const createEscrow = async ({ worker, amount, taxBP, taxRecipient }: { worker: string; amount: string; taxBP: number; taxRecipient: string }) => {
     try {
@@ -278,6 +305,10 @@ export function HashFlowProvider({ children }: { children: React.ReactNode }) {
   const releaseMilestone = async (id: number) => {
     try {
       setModalStage('awaiting_auth');
+      
+      // 1. Capture max yield right before release
+      await syncSimulatedYield();
+
       const hash = await writeRelease({
         address: CONTRACTS.HashFlowEscrow.address,
         abi: CONTRACTS.HashFlowEscrow.abi as any,
@@ -333,6 +364,7 @@ export function HashFlowProvider({ children }: { children: React.ReactNode }) {
       releaseMilestone,
       mockVerify,
       refresh,
+      syncSimulatedYield,
       showShredder,
       setShowShredder,
       selectedFlowForShredder,

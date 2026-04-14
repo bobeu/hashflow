@@ -2470,3 +2470,62 @@ Executed a comprehensive architectural sweep to transition from static simulatio
 
 **Commit**: Pushed to https://github.com/bobeu/hashflow
 
+
+--------------------------------------------------
+
+<!-- user1: 0xA7B2387bF4C259e188751B46859fcA7E2043FEFD
+user2: 0x283c158251f9f9e54894e5D1172D54EC840775Ba
+user3: 0x7624269a420c12395B743aCF327A61f91bd23b84 -->
+
+--------------------------------------------------------------------
+
+### CTO Said:
+
+Why the current MockVault is "Snagging"Your current totalAssets() override calculates a "Growth" number, but that growth is virtual. When `HashFlowEscrow` calls `vault.redeem(shares)`, the base ERC4626 contract tries to send the underlying tokens. If those tokens haven't actually been transferred into the vault's balanceOf, the transaction will revert because the vault is "lying" about having more money than it actually holds in its wallet. 
+
+### CTO Directive: 
+
+**The "Real-Time Yield" Fix**
+
+To make the yield "real" and ticking every second, we need a hybrid approach. The vault should still use its base logic, but we will create a `"Yield Pump"` that keeps the contract's actual balance in sync with the simulated growth. 
+
+**[REFACTOR] MockVault.sol**
+
+Kilo, implement this logic to ensure redeem works for the demo:
+
+1.  Remove the `totalAssets` override: 
+We want to use the standard ERC4626 logic which relies on the actual token balance. This ensures that vault.redeem never fails due to insufficient funds. 
+
+2.  Internal Payout Script: 
+On the frontend, before calling `releaseMilestone`, call a new helper function: `syncSimulatedYield()`. 
+
+3.  The Code Update:
+
+```Solidity
+
+// Add this to MockVault.sol
+function syncSimulatedYield() external {
+    uint256 timeElapsed = block.timestamp - deploymentTimestamp;
+    uint256 baseAssets = IERC20(asset()).balanceOf(address(this));
+    
+    // Calculate what the "fake" growth should be
+    uint256 expectedGrowth = (baseAssets * timeElapsed * GROWTH_RATE_PER_SECOND_PER_ASSET) / 1e12;
+    
+    // MINT those tokens to the vault from thin air (since it's a Mock)
+    // Or, more realistically for a MockUSDC:
+    MockERC20(asset()).mint(address(this), expectedGrowth); 
+}
+
+```
+
+### Why this works: 
+
+By "minting" the growth into the vault's balance, the standard `totalAssets()` will naturally increase every second. When the Escrow contract calls `redeem`, the tokens are physically there to be sent to the worker and the platform. 
+
+### CTO's Final Check
+
+**Frontend Sync:** 
+Update the `useHashFlow` hook to call `syncSimulatedYield()` on a 5-second interval. This will keep the Portfolio Interest card on the dashboard ticking upward visibly.
+
+**Escrow Release:** 
+Ensure that `releaseMilestone` is called after a sync to capture the maximum yield for the worker. 

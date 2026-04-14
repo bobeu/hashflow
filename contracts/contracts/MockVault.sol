@@ -7,6 +7,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+import { MockERC20 } from "./MockERC20.sol";
 
 /**
  * @title MockVault
@@ -59,17 +60,22 @@ contract MockVault is ERC4626, Ownable {
     }
 
     /**
-     * @dev Overridden to simulate time-based yield growth.
+     * @notice Synchronizes the vault's actual token balance with the simulated yield curve.
+     * @dev    Mints the difference between the current balance and the time-weighted 
+     *         growth directly to the vault. This ensures redeem() has real tokens to send.
      */
-    function totalAssets() public view override returns (uint256) {
-        uint256 baseAssets = IERC20(asset()).balanceOf(address(this));
-        if (totalSupply() == 0) return baseAssets;
-
+    function syncSimulatedYield() external {
         uint256 timeElapsed = block.timestamp - deploymentTimestamp;
-        // growth = (baseAssets * timeElapsed * rate) / 1e12;
-        uint256 growth = (baseAssets * timeElapsed * GROWTH_RATE_PER_SECOND_PER_ASSET) / 1e12;
+        uint256 baseAssets = IERC20(asset()).balanceOf(address(this));
         
-        return baseAssets + growth;
+        if (totalSupply() == 0) return;
+
+        // Calculate what the "fake" growth should be
+        uint256 expectedGrowth = (baseAssets * timeElapsed * GROWTH_RATE_PER_SECOND_PER_ASSET) / 1e12;
+        
+        if (expectedGrowth > 0) {
+            MockERC20(asset()).mint(address(this), expectedGrowth);
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
