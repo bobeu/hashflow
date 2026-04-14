@@ -4,8 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, UserCheck, Zap, Shield, TrendingUp, Landmark } from 'lucide-react';
 import { useHashFlow } from '@/context/HashFlowContext';
+import { useReadContract } from 'wagmi';
 import { formatUnits } from 'viem';
 import { cn, MilestoneFlow } from '@/lib/utils';
+import { CONTRACTS } from '@/contracts';
 
 interface Props {
   flow: MilestoneFlow | null;
@@ -14,17 +16,20 @@ interface Props {
 
 export function MilestoneDetailModal({ flow, onClose }: Props) {
   const { releaseMilestone, stats, setSelectedFlowForShredder } = useHashFlow();
-  const [liveYield, setLiveYield] = useState(0n);
 
-  useEffect(() => {
-    if (flow) {
-      setLiveYield(flow.yield);
-      const interval = setInterval(() => {
-        setLiveYield(prev => prev + 100n); // Simulated tick
-      }, 200);
-      return () => clearInterval(interval);
+  // Fetch real yield from blockchain
+  const { data: blockchainYield } = useReadContract({
+    address: CONTRACTS.HashFlowEscrow.address,
+    abi: CONTRACTS.HashFlowEscrow.abi as any,
+    functionName: 'getPendingYield',
+    args: flow ? [BigInt(flow.id)] : undefined,
+    query: { 
+      enabled: !!flow,
+      refetchInterval: 5000 // Refresh every 5 seconds for live yield
     }
-  }, [flow]);
+  });
+
+  const liveYield = (blockchainYield as bigint) ?? flow?.yield ?? 0n;
 
   if (!flow) return null;
 
@@ -33,7 +38,7 @@ export function MilestoneDetailModal({ flow, onClose }: Props) {
   const netPrincipal = principal - tax;
   
   // Platform takes 50% of yield
-  const protocolFee = liveYield / 2n;
+  const protocolFee = liveYield / 5n;
   const workerYield = liveYield - protocolFee;
 
   return (

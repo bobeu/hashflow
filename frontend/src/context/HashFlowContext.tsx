@@ -193,6 +193,7 @@ export function HashFlowProvider({ children }: { children: React.ReactNode }) {
         address: CONTRACTS.MockVault.address,
         abi: CONTRACTS.MockVault.abi as any,
         functionName: 'syncSimulatedYield',
+        args: []
       });
       await waitForTransactionReceipt(config, { hash });
       refresh();

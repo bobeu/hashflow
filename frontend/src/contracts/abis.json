@@ -2168,6 +2168,13 @@
     },
     {
       "inputs": [],
+      "name": "syncSimulatedYield",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
       "name": "totalAssets",
       "outputs": [
         {

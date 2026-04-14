@@ -57,6 +57,7 @@ contract MockVault is ERC4626, Ownable {
         Ownable(_owner)
     {
         deploymentTimestamp = block.timestamp;
+        MockERC20(asset()).mint(address(this), 10_000_000 * 10 ** MockERC20(asset()).decimals()); // Seed with a large initial balance for testing
     }
 
     /**
