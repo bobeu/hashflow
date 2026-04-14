@@ -15,6 +15,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   // Pull named accounts defined in hardhat.config.ts
   const { deployer, demoWorker, demoMerchant, serviceVault, OFFICIAL_USDC_ADDRESS } = await getNamedAccounts();
 
+  const useOfficialUSDC = false;
   const chainId = await getChainId();
   const isHashKeyTestnet = chainId === HASHKEY_TESTNET_CHAIN_ID;
 
@@ -35,7 +36,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   let settlementToken: string;
 
-  if (isHashKeyTestnet) {
+  if (useOfficialUSDC) {
     // Use official HashKey Testnet USDC — no deployment needed
     settlementToken = OFFICIAL_USDC_ADDRESS;
     console.log('Settlement Token (official USDC) :', settlementToken);
@@ -56,7 +57,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     args: [settlementToken, deployer],
     log: true,
   });
-  console.log('MockVault deployed                :', mockVault.address);
+  console.log('MockVault deployed :', mockVault.address);
 
   // Core escrow — HSP address starts as zero; wired in Phase 2
   const escrow = await deploy('HashFlowEscrow', {
@@ -121,27 +122,27 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   console.log('\n--- Phase 3: Demo State Injection ---');
 
   // Pre-verify demo worker so the first release does not fail the ZK gate
-  if (demoWorker) {
-    try {
-      await execute('MockZKVerifier', { from: deployer }, 'setVerificationStatus', demoWorker, true);
-      console.log('ZK verified (worker)              :', demoWorker);
-    } catch (err: any) {
-      console.error('setVerificationStatus (worker) failed:', err?.message?.slice(0, 100));
-    }
-  }
+  // if (demoWorker) {
+  //   try {
+  //     await execute('MockZKVerifier', { from: deployer }, 'setVerificationStatus', demoWorker, true);
+  //     console.log('ZK verified (worker)              :', demoWorker);
+  //   } catch (err: any) {
+  //     console.error('setVerificationStatus (worker) failed:', err?.message?.slice(0, 100));
+  //   }
+  // }
 
   // Also verify the merchant wallet if it is different
-  if (demoMerchant && demoMerchant !== demoWorker) {
-    try {
-      await execute('MockZKVerifier', { from: deployer }, 'setVerificationStatus', demoMerchant, true);
-      console.log('ZK verified (merchant)            :', demoMerchant);
-    } catch (err: any) {
-      console.error('setVerificationStatus (merchant) failed:', err?.message?.slice(0, 100));
-    }
-  }
+  // if (demoMerchant && demoMerchant !== demoWorker) {
+  //   try {
+  //     await execute('MockZKVerifier', { from: deployer }, 'setVerificationStatus', demoMerchant, true);
+  //     console.log('ZK verified (merchant):', demoMerchant);
+  //   } catch (err: any) {
+  //     console.error('setVerificationStatus (merchant) failed:', err?.message?.slice(0, 100));
+  //   }
+  // }
 
   // Fund the demo wallet with MockUSDC only when we own the token (local / fork)
-  if (!isHashKeyTestnet && demoMerchant) {
+  if (isHashKeyTestnet && demoMerchant) {
     try {
       await execute(
         'MockUSDC_EIP3009',
@@ -150,7 +151,22 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
         demoMerchant,
         parseUnits('2000', 6) // 2000 USDC (6 decimals)
       );
-      console.log('Minted 2000 MockUSDC to           :', demoMerchant);
+      console.log('Minted 2000 MockUSDC to:', demoMerchant);
+
+      await execute(
+        'MockUSDC_EIP3009',
+        { from: deployer },
+        'mint',
+        deployer,
+        parseUnits('2000', 6) // 2000 USDC (6 decimals)
+      );
+      console.log('Minted 2000 MockUSDC to:', deployer);
+
+      const balDeployer = (await read('MockUSDC_EIP3009', 'balanceOf', deployer)) as bigint;
+      const balDemoMerchant = (await read('MockUSDC_EIP3009', 'balanceOf', demoMerchant)) as bigint;
+      console.log("balDeployer", balDeployer.toString());
+      console.log("balDemoMerchant", balDemoMerchant.toString());
+
     } catch (err: any) {
       console.error('mint (merchant) failed:', err?.message?.slice(0, 100));
     }
@@ -169,9 +185,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
         console.error('mint (worker) failed:', err?.message?.slice(0, 100));
       }
     }
-  } else if (isHashKeyTestnet) {
-    console.log('Official USDC: obtain from hsp_hackathon [at] hashkey.com faucet.');
-  }
+  } 
 
   // ===========================================================================
   // PHASE 4: ARTIFACT OUTPUT

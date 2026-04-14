@@ -61,7 +61,8 @@ const config: HardhatUserConfig = {
         enabled: true,
         runs: 200,
       },
-      evmVersion: "Cancun-compatible"
+      evmVersion: "cancun"
+      // evmVersion: "constantinople", // Using "constantinople" for broader compatibility, as "paris" may not be supported in all environments yet
       // evmVersion: "paris"
     }
   },

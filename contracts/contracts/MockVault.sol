@@ -23,6 +23,13 @@ contract MockVault is ERC4626, Ownable {
     using SafeERC20 for IERC20;
     using Math for uint256;
 
+    uint256 public immutable deploymentTimestamp;
+    
+    // 0.01% growth per hour (roughly) -> 2777777 wei per asset per second (if asset has 18 decimals)
+    // For 6 decimals (USDC), we want it slower but still visible.
+    // Let's use a scale of 1e12 for precision.
+    uint256 public constant GROWTH_RATE_PER_SECOND_PER_ASSET = 2777; // Roughly 10% APY simulated
+
     // ─────────────────────────────────────────────────────────────────────────
     // Events
     // ─────────────────────────────────────────────────────────────────────────
@@ -47,7 +54,23 @@ contract MockVault is ERC4626, Ownable {
         ERC4626(IERC20(_asset))
         ERC20("MockVault Shares", "mvSHARE")
         Ownable(_owner)
-    {}
+    {
+        deploymentTimestamp = block.timestamp;
+    }
+
+    /**
+     * @dev Overridden to simulate time-based yield growth.
+     */
+    function totalAssets() public view override returns (uint256) {
+        uint256 baseAssets = IERC20(asset()).balanceOf(address(this));
+        if (totalSupply() == 0) return baseAssets;
+
+        uint256 timeElapsed = block.timestamp - deploymentTimestamp;
+        // growth = (baseAssets * timeElapsed * rate) / 1e12;
+        uint256 growth = (baseAssets * timeElapsed * GROWTH_RATE_PER_SECOND_PER_ASSET) / 1e12;
+        
+        return baseAssets + growth;
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Owner — Test Helpers

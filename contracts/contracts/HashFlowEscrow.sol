@@ -106,7 +106,7 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
     uint16 public yieldFeeBP = 5000; // Default 50%
 
     /// @notice Whether to use Demo or live verifier
-    boool public useDemo;
+    bool public useDemo;
 
     /// @notice On-chain indexing: Maps merchant addresses to their escrow IDs.
     mapping(address => uint256[]) internal clientMilestones;

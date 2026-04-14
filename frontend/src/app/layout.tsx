@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Suspense } from "react";
 import { Web3Provider } from "@/providers/web3-provider";
+import { HashFlowProvider } from "@/context/HashFlowContext";
 import { Toaster } from "sonner";
 
 const inter = Inter({
@@ -35,10 +36,12 @@ export default function RootLayout({
         className={`${inter.variable} ${jetBrainsMono.variable} font-sans min-h-full bg-background antialiased`}
       >
         <Web3Provider>
-          <Suspense fallback={null}>
-            {children}
-          </Suspense>
-          <Toaster position="top-right" richColors />
+          <HashFlowProvider>
+            <Suspense fallback={null}>
+              {children}
+            </Suspense>
+            <Toaster position="top-right" richColors />
+          </HashFlowProvider>
         </Web3Provider>
       </body>
     </html>
