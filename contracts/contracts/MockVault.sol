@@ -12,13 +12,11 @@ import { MockERC20 } from "./MockERC20.sol";
 /**
  * @title MockVault
  * @author HashFlow Protocol
- * @notice A minimal ERC-4626 vault used exclusively in tests and local development.
- *         Simulates yield by allowing the deployer to inject extra tokens (simulated
- *         interest) into the vault, which inflates the share-to-asset exchange rate.
+ * @notice A pull-based ERC-4626 vault where yield is backed by the owner's allowance.
+ *         The vault calculates virtual growth but only actualizes it when funds are withdrawn.
  *
- * @dev    Yield injection via {simulateYield} is intentionally privileged (owner-only)
- *         so that tests can control the exact amount of returns. This contract is
- *         **NOT** suitable for production.
+ * @dev    This is a "Managed Yield Engine" - yield is on-demand and pulled from the owner's
+ *         allowance when beneficiaries redeem their shares.
  */
 contract MockVault is ERC4626, Ownable {
     using SafeERC20 for IERC20;
@@ -26,21 +24,20 @@ contract MockVault is ERC4626, Ownable {
 
     uint256 public immutable deploymentTimestamp;
     
-    // 0.01% growth per hour (roughly) -> 2777777 wei per asset per second (if asset has 18 decimals)
-    // For 6 decimals (USDC), we want it slower but still visible.
-    // Let's use a scale of 1e12 for precision.
-    uint256 public constant GROWTH_RATE_PER_SECOND_PER_ASSET = 2777; // Roughly 10% APY simulated
+    // ~10% APY simulated (2777 wei per asset per second for 6 decimals)
+    uint256 public constant GROWTH_RATE_PER_SECOND_PER_ASSET = 2777;
+    uint256 public constant GROWTH_PRECISION = 1e12;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Events
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * @notice Emitted when the owner injects simulated yield into the vault.
-     * @param amount      Token amount added as yield.
-     * @param totalAssets New total asset balance inside the vault after injection.
+     * @notice Emitted when yield is pulled from owner and distributed.
+     * @param owner      Address of the yield provider.
+     * @param amount    Amount of yield pulled.
      */
-    event YieldSimulated(uint256 amount, uint256 totalAssets);
+    event YieldPulled(address indexed owner, uint256 amount);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constructor
@@ -49,7 +46,7 @@ contract MockVault is ERC4626, Ownable {
     /**
      * @notice Deploys the MockVault wrapping the given ERC-20 asset.
      * @param _asset  ERC-20 token this vault accepts.
-     * @param _owner  Owner address allowed to inject simulated yield.
+     * @param _owner  Owner address who provides yield via allowance.
      */
     constructor(address _asset, address _owner)
         ERC4626(IERC20(_asset))
@@ -57,41 +54,103 @@ contract MockVault is ERC4626, Ownable {
         Ownable(_owner)
     {
         deploymentTimestamp = block.timestamp;
-        MockERC20(asset()).mint(address(this), 10_000_000 * 10 ** MockERC20(asset()).decimals()); // Seed with a large initial balance for testing
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Core Accounting Override (Pull-Based Yield)
+    // ─────────────────────────────────────────────────────────────────────────
+
     /**
-     * @notice Synchronizes the vault's actual token balance with the simulated yield curve.
-     * @dev    Mints the difference between the current balance and the time-weighted 
-     *         growth directly to the vault. This ensures redeem() has real tokens to send.
+     * @notice Returns the total assets managed by the vault.
+     * @dev    Calculates virtual growth based on time elapsed and checks if owner
+     *         has sufficient allowance to back the growth. If not, returns actual balance.
      */
-    function syncSimulatedYield() external {
+    function totalAssets() public view override returns (uint256) {
+        uint256 balance = IERC20(asset()).balanceOf(address(this));
+        
+        if (totalSupply() == 0) return balance;
+
         uint256 timeElapsed = block.timestamp - deploymentTimestamp;
-        uint256 baseAssets = IERC20(asset()).balanceOf(address(this));
         
-        if (totalSupply() == 0) return;
+        // Calculate expected growth using Math.mulDiv for precision
+        uint256 expectedGrowth = Math.mulDiv(
+            balance * timeElapsed,
+            GROWTH_RATE_PER_SECOND_PER_ASSET,
+            GROWTH_PRECISION
+        );
 
-        // Calculate what the "fake" growth should be
-        uint256 expectedGrowth = (baseAssets * timeElapsed * GROWTH_RATE_PER_SECOND_PER_ASSET) / 1e12;
-        
-        if (expectedGrowth > 0) {
-            MockERC20(asset()).mint(address(this), expectedGrowth);
+        // Check owner's allowance to back the growth
+        uint256 allowance = IERC20(asset()).allowance(owner(), address(this));
+
+        // If owner has enough allowance, include expected growth in totalAssets
+        if (allowance >= expectedGrowth) {
+            return balance + expectedGrowth;
         }
+
+        // Otherwise, return only actual balance (no yield)
+        return balance;
+    }
+
+    /**
+     * @notice Converts shares to assets using the pull-based totalAssets.
+     */
+    function convertToAssets(uint256 shares) public view override returns (uint256) {
+        if (totalSupply() == 0) return shares;
+        return Math.mulDiv(shares, totalAssets(), totalSupply());
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Owner — Test Helpers
+    // Yield Pull on Withdraw/Redeem
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * @notice Injects `_amount` of the underlying asset into the vault to simulate yield.
-     * @dev    The caller must have pre-approved this contract to spend `_amount` of the
-     *         underlying token. After transfer, future {convertToAssets} calls will
-     *         reflect the increased asset-per-share ratio.
-     * @param _amount  Number of tokens (in token units) to add as simulated yield.
+     * @notice Internal hook that pulls yield from owner before sending assets.
+     * @dev    Called by ERC4626's withdraw/redeem logic before transferring assets.
      */
-    function simulateYield(uint256 _amount) external onlyOwner {
-        IERC20(asset()).safeTransferFrom(msg.sender, address(this), _amount);
-        emit YieldSimulated(_amount, totalAssets());
+    function _withdraw(
+        address assets,
+        address receiver,
+        address owner,
+        uint256 shares,
+        uint256 assetsNeeded
+    ) internal override {
+        // Calculate how much yield is due based on shares
+        uint256 currentTotalAssets = totalAssets();
+        uint256 userAssetsBefore = Math.mulDiv(shares, currentTotalAssets, totalSupply());
+        
+        // If user is withdrawing less than their share of total assets, they get yield
+        if (assetsNeeded < userAssetsBefore && assetsNeeded > 0) {
+            uint256 yieldDue = userAssetsBefore - assetsNeeded;
+            
+            // Pull yield from owner if available
+            uint256 allowance = IERC20(asset()).allowance(owner(), address(this));
+            if (allowance >= yieldDue) {
+                try IERC20(asset()).safeTransferFrom(owner(), address(this), yieldDue) {
+                    emit YieldPulled(owner(), yieldDue);
+                } catch {
+                    // If pull fails, continue with actual balance
+                }
+            }
+        }
+
+        super._withdraw(assets, receiver, owner, shares, assetsNeeded);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Owner — Admin Functions
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * @notice Returns the current yield rate and expected growth.
+     */
+    function getYieldInfo() external view returns (uint256 timeElapsed, uint256 expectedGrowth, uint256 allowance) {
+        timeElapsed = block.timestamp - deploymentTimestamp;
+        uint256 balance = IERC20(asset()).balanceOf(address(this));
+        
+        expectedGrowth = totalSupply() > 0 
+            ? Math.mulDiv(balance * timeElapsed, GROWTH_RATE_PER_SECOND_PER_ASSET, GROWTH_PRECISION)
+            : 0;
+        
+        allowance = IERC20(asset()).allowance(owner(), address(this));
     }
 }

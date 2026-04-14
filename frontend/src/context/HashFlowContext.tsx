@@ -6,7 +6,7 @@ import { waitForTransactionReceipt } from "wagmi/actions";
 import { CONTRACTS } from '@/contracts';
 import { formatUnits, parseUnits, Hex, isAddress, type Address } from 'viem';
 import { toast } from 'sonner';
-import { JURISDICTIONS } from '@/components/dashboard/jurisdiction-selector';
+// import { JURISDICTIONS } from '@/components/dashboard/jurisdiction-selector';
 import { TransactionStage } from '@/components/TransactionModal';
 import { MilestoneFlow, MOCK_FLOWS } from '@/lib/utils';
 
@@ -40,13 +40,13 @@ interface HashFlowContextType {
   releaseMilestone: (id: number) => Promise<void>;
   mockVerify: (worker: string) => Promise<void>;
   refresh: () => void;
-  syncSimulatedYield: () => Promise<void>;
+  // syncSimulatedYield: () => Promise<void>;
 }
 
 const HashFlowContext = createContext<HashFlowContextType | undefined>(undefined);
 
 export function HashFlowProvider({ children }: { children: React.ReactNode }) {
-  const { address, isConnected, chainId } = useAccount();
+  const { address, chainId } = useAccount();
   const config = useConfig();
   const { signTypedDataAsync } = useSignTypedData();
 
@@ -156,12 +156,12 @@ export function HashFlowProvider({ children }: { children: React.ReactNode }) {
   // Sync Interval: Ticking the yield growth every 5 seconds
   useEffect(() => {
     if (!address) return;
-    const interval = setInterval(() => {
-      // Background sync - we don't await or toast here to avoid UI spam
-      // but the contract call will trigger the growth minting
-      syncSimulatedYield().catch(console.error);
-    }, 5000);
-    return () => clearInterval(interval);
+    // const interval = setInterval(() => {
+    //   // Background sync - we don't await or toast here to avoid UI spam
+    //   // but the contract call will trigger the growth minting
+    //   syncSimulatedYield().catch(console.error);
+    // }, 5000);
+    // return () => clearInterval(interval);
   }, [address]);
 
   // Watch for events to auto-refresh
@@ -187,20 +187,20 @@ export function HashFlowProvider({ children }: { children: React.ReactNode }) {
   const { writeContractAsync: writeVerify } = useWriteContract();
   const { writeContractAsync: writeSync } = useWriteContract();
 
-  const syncSimulatedYield = async () => {
-    try {
-      const hash = await writeSync({
-        address: CONTRACTS.MockVault.address,
-        abi: CONTRACTS.MockVault.abi as any,
-        functionName: 'syncSimulatedYield',
-        args: []
-      });
-      await waitForTransactionReceipt(config, { hash });
-      refresh();
-    } catch (err) {
-      console.warn("Sync failed (possibly user rejected or already synced):", err);
-    }
-  };
+  // const syncSimulatedYield = async () => {
+  //   try {
+  //     const hash = await writeSync({
+  //       address: CONTRACTS.MockVault.address,
+  //       abi: CONTRACTS.MockVault.abi as any,
+  //       functionName: 'syncSimulatedYield',
+  //       args: []
+  //     });
+  //     await waitForTransactionReceipt(config, { hash });
+  //     refresh();
+  //   } catch (err) {
+  //     console.warn("Sync failed (possibly user rejected or already synced):", err);
+  //   }
+  // };
 
   const createEscrow = async ({ worker, amount, taxBP, taxRecipient }: { worker: string; amount: string; taxBP: number; taxRecipient: string }) => {
     try {
@@ -308,7 +308,7 @@ export function HashFlowProvider({ children }: { children: React.ReactNode }) {
       setModalStage('awaiting_auth');
       
       // 1. Capture max yield right before release
-      await syncSimulatedYield();
+      // await syncSimulatedYield();
 
       const hash = await writeRelease({
         address: CONTRACTS.HashFlowEscrow.address,
@@ -365,7 +365,7 @@ export function HashFlowProvider({ children }: { children: React.ReactNode }) {
       releaseMilestone,
       mockVerify,
       refresh,
-      syncSimulatedYield,
+      // syncSimulatedYield,
       showShredder,
       setShowShredder,
       selectedFlowForShredder,

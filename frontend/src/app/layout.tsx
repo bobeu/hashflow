@@ -33,7 +33,8 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full">
       <body
-        className={`${inter.variable} ${jetBrainsMono.variable} font-sans min-h-full bg-background antialiased`}
+        className={`font-sans min-h-full bg-background antialiased`}
+        // className={`${inter.variable} ${jetBrainsMono.variable} font-sans min-h-full bg-background antialiased`}
       >
         <Web3Provider>
           <HashFlowProvider>

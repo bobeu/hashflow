@@ -4,11 +4,10 @@ import React from 'react';
 import {
   RainbowKitProvider,
   getDefaultConfig,
-  Chain,
   lightTheme,
 } from '@rainbow-me/rainbowkit';
 import { WagmiProvider, http } from 'wagmi';
-import { hashkeyTestnet, hashkey } from "wagmi/chains"
+import { hashkeyTestnet } from "wagmi/chains"
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@rainbow-me/rainbowkit/styles.css';
 

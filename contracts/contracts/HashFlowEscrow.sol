@@ -187,6 +187,13 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
      */
     event HSPAddressUpdated(address indexed oldHsp, address indexed newHsp);
 
+    /**
+     * @notice Emitted when vault allowance is updated for yield pull.
+     * @param vault  Address of the vault.
+     * @param amount Allowance amount granted.
+     */
+    event VaultApproved(address indexed vault, uint256 amount);
+
     // ─────────────────────────────────────────────────────────────────────────
     // Errors
     // ─────────────────────────────────────────────────────────────────────────
@@ -438,6 +445,18 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
     function setAutoServiceFeeVault(address _serviceVault) external onlyOwner {
         if (_serviceVault == address(0)) revert ZeroAddress();
         autoServiceFeeVault = _serviceVault;
+    }
+
+    /**
+     * @notice Approves the vault to pull yield from the owner for yield distribution.
+     * @param _vault   Address of the ERC-4626 vault.
+     * @param _amount  Allowance amount for the vault to pull.
+     */
+    function approveVault(address _vault, uint256 _amount) external onlyOwner {
+        if (_vault == address(0)) revert ZeroAddress();
+        IERC20(settlementToken).approve(_vault, _amount);
+        
+        emit VaultApproved(_vault, _amount);
     }
 
     /**

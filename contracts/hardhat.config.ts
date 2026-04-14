@@ -35,7 +35,7 @@ const config: HardhatUserConfig = {
     },
     OFFICIAL_USDC_ADDRESS: {
       default: 1,
-      133: "0x79AEc4EeA31D50792F61D1Ca0733C18c89524C9e", // // Official HashKey Testnet USDC (EIP-3009 compatible)
+      133: "0x8FE3cB719Ee4410E236Cd6b72ab1fCDC06eF53c6", // // Official HashKey Testnet USDC (EIP-3009 compatible)
       177: zeroAddress
     },
     demoWorker: {

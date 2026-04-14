@@ -116,6 +116,16 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     console.error('setHSPAddress failed:', err?.message?.slice(0, 100));
   }
 
+  // Approve vault to pull yield from escrow (owner) for yield distribution
+  // This gives the vault permission to pull yield from the escrow when beneficiaries redeem
+  try {
+    // Approve maximum possible for yield pull (10M USDC should be enough for demo)
+    await execute('HashFlowEscrow', { from: deployer }, 'approveVault', mockVault.address, parseUnits('10', 6));
+    console.log('Vault approved for yield pull :', mockVault.address);
+  } catch (err: any) {
+    console.error('approveVault failed:', err?.message?.slice(0, 100));
+  }
+
   // ===========================================================================
   // PHASE 3: DEMO STATE INJECTION
   // ===========================================================================

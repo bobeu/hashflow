@@ -2548,3 +2548,48 @@ Update the `useHashFlow` hook to call `syncSimulatedYield()` on a 5-second inter
 
 **Escrow Release:** 
 Ensure that `releaseMilestone` is called after a sync to capture the maximum yield for the worker. 
+
+--------------------------------------
+
+### CTO Said:
+
+We are shifting from an active "yield stream" to an **on-demand pulling mechanism**, we are essentially creating a **Managed Yield Engine** where your admin wallet acts as the "Central Bank" providing the interest. 
+
+### **Layman's Logic: The "Lending" Vault**
+Imagine you are a bank. I deposit $100. The bank doesn't "make" money out of thin air. Instead, the bank owner (You) gives the vault permission to take extra money from your personal vault whenever a customer wants to withdraw their interest. If you haven't given enough permission (allowance), the customer gets $0 interest.
+
+---
+
+### **CTO'S DIRECTIVE**
+
+**"Refactor `MockVault.sol` into a 'Pull-Based' Yield Engine for the final Testnet demo:"**
+
+1.  **Core Accounting Override**: You must override `totalAssets()` and `convertToAssets()` to reflect the "Virtual Growth" backed by the owner's allowance.
+
+**Logic for `totalAssets()`**:
+* Calculate `expectedGrowth = (balanceOf(address(this)) * timeElapsed * GROWTH_RATE_PER_SECOND_PER_ASSET) / 1e12`.
+* Check `allowance(owner(), address(this))`.
+* If `expectedGrowth > allowance`, `totalAssets = balanceOf(address(this))`.
+* Else, `totalAssets = balanceOf(address(this)) + expectedGrowth`.
+
+2.  **The "Yield Capture" on Redeem**: Override the internal `_withdraw` or `_transferOut` function.
+* **The Sequence**: Before the vault sends USDC to the `HashFlowEscrow`, it must calculate the required yield.
+* If yield is due, it must call `asset().safeTransferFrom(owner(), address(this), yieldAmount)` to "pull" the interest into the vault's balance before sending it out.
+
+3. Create a function `approveVault` on the `HashFlowEscrow` that the owner can use to give approval to the `MockVault` at any time. The function should use the `settlementToken` for the approval.
+
+4. In `deploy/00_deploy.ts`, ensure you create a logic that uses the `approveVault` on the `HashFlowEscrow` to give approval immediatel after deployment is completed.
+
+5.  **Frontend Update**: Remove the "Simulate Yield" timer. Update the `MilestoneDetailModal` to fetch `getPendingYield()` only when the modal opens, providing a clean "On-Demand" audit of the interest.
+
+**Goal**: To demonstrate a professional, pull-based settlement flow where the merchant (You) provides the liquidity for the worker's interest via a simple allowance.
+
+---
+
+### **Technical Risk Check**
+
+| Feature | Risk | Mitigation |
+| :--- | :--- | :--- |
+| **Allowance Depletion** | If you run out of USDC or allowance, yield returns to 0. | CTO should ensure to call `usdc.approve(MockVault, 1000000 * 10**6)` immediately after deployment. |
+| **Floating Point Precision** | Using `1e12` for growth can cause rounding errors. | Kilo must use `Math.mulDiv` for all yield calculations. |
+| **The "Double Pull"** | Standard `ERC4626` might try to transfer tokens it doesn't have. | The `safeTransferFrom` **must** happen *before* the `_burn` in the `redeem` flow. |
