@@ -1,6 +1,10 @@
-import { parseUnits, Hex } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
-import { createPublicClient, http, parseEther } from 'viem';
+import { parseUnits, Hex, publicActions } from 'viem';
+import { Address, privateKeyToAccount } from 'viem/accounts';
+import { createPublicClient, createWalletClient, http } from 'viem';
+import { config } from "dotenv";
+import { hashkeyTestnet } from "viem/chains";
+
+config()
 
 const ERC20_ABI = [
   {
@@ -31,7 +35,7 @@ export async function erc20Approve({
   amount,
   decimals = 6,
   rpcUrl = HASHKEY_TESTNET_RPC
-}: ApproveParams): Promise<string> {
+}: ApproveParams) {
   const privateKey = process.env.P_KEY_0xD7c;
   if (!privateKey) {
     throw new Error('Private key not found in P_KEY_0xD7c environment variable');
@@ -39,34 +43,31 @@ export async function erc20Approve({
 
   const account = privateKeyToAccount(privateKey as Hex);
 
-  const client = createPublicClient({
+  const wClient = createWalletClient({
     transport: http(rpcUrl),
-    chain: {
-      id: 133,
-      name: 'HashKey Testnet',
-      nativeCurrency: { name: 'HSK', symbol: 'HSK', decimals: 18 },
-      rpcUrls: { default: { http: [rpcUrl] } }
-    }
-  });
+    account,
+    chain: hashkeyTestnet
+  }).extend(publicActions);
 
   const amountWei = parseUnits(amount as `${number}`, decimals);
 
-  const hash = await client.writeContract({
+  const hash = await wClient.writeContract({
     address: tokenAddress as Hex,
-    abi: ERC20_ABI,
+    abi: ERC20_ABI as any,
     functionName: 'approve',
-    args: [spender as Hex, amountWei],
+    args: [spender as Address, amountWei],
     account
   });
 
-  return hash;
+  const result = await wClient.waitForTransactionReceipt({hash, confirmations: 2});
+  return result;
 }
 
 export async function approveMockVaultForYield(
   mockVaultAddress: string,
   settlementTokenAddress: string,
-  amount: string = '10000000'
-): Promise<string> {
+  amount: string = '10'
+) {
   return erc20Approve({
     tokenAddress: settlementTokenAddress,
     spender: mockVaultAddress,

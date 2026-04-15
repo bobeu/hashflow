@@ -24,10 +24,11 @@ contract MockVault is ERC4626, Ownable {
 
     uint256 public immutable deploymentTimestamp;
     address public funder;
+    address public escrow;
     
     // ~10% APY simulated (27 wei per asset per second for 6 decimals)
     uint256 public constant GROWTH_RATE_PER_SECOND_PER_ASSET = 277;
-    uint256 public constant GROWTH_PRECISION = 1e12;
+    uint256 public constant GROWTH_PRECISION = 1e10;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Events
@@ -58,6 +59,11 @@ contract MockVault is ERC4626, Ownable {
         funder = _funder;
     }
 
+    function setEscrow(address _escrow) public onlyOwner {
+        require(_escrow != address(0), "Invalid escrow address");
+        escrow = _escrow;
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Core Accounting Override (Pull-Based Yield)
     // ─────────────────────────────────────────────────────────────────────────
@@ -67,11 +73,10 @@ contract MockVault is ERC4626, Ownable {
      * @dev    Calculates virtual growth based on time elapsed and checks if owner
      *         has sufficient allowance to back the growth. If not, returns actual balance.
      */
-    function totalAssets() public view override returns (uint256) {
-        uint256 balance = IERC20(asset()).balanceOf(address(this));
-        
+    function totalAssets() public view override returns (uint256 balance) {
+        balance = IERC20(asset()).balanceOf(address(this));
         if (totalSupply() == 0) return balance;
-
+        
         uint256 timeElapsed = block.timestamp - deploymentTimestamp;
         
         // Calculate expected growth using Math.mulDiv for precision
@@ -88,18 +93,18 @@ contract MockVault is ERC4626, Ownable {
         if (allowance >= expectedGrowth) {
             return balance + expectedGrowth;
         }
-
-        // Otherwise, return only actual balance (no yield)
-        return balance;
     }
 
     /**
      * @notice Converts shares to assets using the pull-based totalAssets.
      */
-    function convertToAssets(uint256 shares) public view override returns (uint256) {
+    function _convertToAssets(uint256 shares, Math.Rounding round) internal view override returns (uint256) {
+        // return shares.mulDiv(totalAssets(), totalSupply(), round);
         if (totalSupply() == 0) return shares;
-        return Math.mulDiv(shares, totalAssets(), totalSupply());
+        uint256 tAssets = totalAssets();
+        return shares + (tAssets > 0? tAssets / 5 : 0); 
     }
+
 
     // ─────────────────────────────────────────────────────────────────────────
     // Yield Pull on Withdraw/Redeem
@@ -110,29 +115,29 @@ contract MockVault is ERC4626, Ownable {
      * @dev    Called by ERC4626's withdraw/redeem logic before transferring assets.
      */
     function _withdraw(
-        address assets,
+        address caller,
         address receiver,
         address _owner,
-        uint256 shares,
-        uint256 assetsNeeded
+        uint256 assets,
+        uint256 shares
     ) internal override {
         // Calculate how much yield is due based on shares
-        uint256 currentTotalAssets = totalAssets();
-        uint256 userAssetsBefore = Math.mulDiv(shares, currentTotalAssets, totalSupply());
-        
-        // If user is withdrawing less than their share of total assets, they get yield
-        if (assetsNeeded < userAssetsBefore && assetsNeeded > 0) {
-            uint256 yieldDue = userAssetsBefore - assetsNeeded;
-            
-            // Pull yield from owner if available
+        uint256 withdrawable = assets;
+        uint256 actualVaultBalance = IERC20(asset()).balanceOf(address(this));
+        uint256 diff;
+        if(actualVaultBalance < withdrawable) {
+            diff = withdrawable - actualVaultBalance;
             uint256 allowance = IERC20(asset()).allowance(funder, address(this));
-            if (allowance >= yieldDue) {
-                IERC20(asset()).safeTransferFrom(funder, address(this), yieldDue);
-                emit YieldPulled(funder, yieldDue);
+            if(allowance >= diff) {
+                IERC20(asset()).safeTransferFrom(funder, address(this), diff);
+            } else {
+                withdrawable = actualVaultBalance;
+                IERC20(asset()).safeTransferFrom(funder, address(this), allowance);
             }
         }
+        require(withdrawable >= shares, "Inconsistent computation");
 
-        super._withdraw(assets, receiver, _owner, shares, assetsNeeded);
+        super._withdraw(caller, receiver, _owner, withdrawable, shares);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -151,13 +156,19 @@ contract MockVault is ERC4626, Ownable {
             : 0;
         
         allowance = IERC20(asset()).allowance(funder, address(this));
+        if(expectedGrowth > allowance) expectedGrowth = allowance;
     }
 
-    function pullYieldFromOwner(uint256 amount) external {
+    function pullYieldFromOwner() external {
         address sender = _msgSender();
         // Only the Escrow or Owner can trigger the top-up
-        require(sender == owner() || sender == funder, "Unauthorized");
-        IERC20(asset()).safeTransferFrom(funder, address(this), amount);
-        emit YieldPulled(funder, amount);
+        require(sender == escrow || sender == funder, "Unauthorized");
+        (,uint256 expectedGrowth,,) = this.getYieldInfo();
+        IERC20(asset()).safeTransferFrom(funder, address(this), expectedGrowth);
+        emit YieldPulled(funder, expectedGrowth);
+    }
+
+    function withdrawUnderlyingAsset() public onlyOwner {
+        IERC20(asset()).transfer(owner(), IERC20(asset()).balanceOf(address(this)));
     }
 }

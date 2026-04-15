@@ -70,7 +70,7 @@ export function ShredderViz({ isVisible, onComplete, flow }: ShredderVizProps) {
                 transition={{ delay: 1, duration: 0.8 }}
             />
             <motion.text 
-                x="320" y="55" fontSize="10" fontWeight="bold" fill="#10B981"
+                x="310" y="55" fontSize="10" fontWeight="bold" fill="#10B981"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 1.8 }}
@@ -87,7 +87,7 @@ export function ShredderViz({ isVisible, onComplete, flow }: ShredderVizProps) {
                 transition={{ delay: 1.2, duration: 0.8 }}
             />
             <motion.text 
-                x="320" y="105" fontSize="10" fontWeight="bold" fill="#F59E0B"
+                x="310" y="105" fontSize="10" fontWeight="bold" fill="#F59E0B"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 2 }}
@@ -104,7 +104,7 @@ export function ShredderViz({ isVisible, onComplete, flow }: ShredderVizProps) {
                 transition={{ delay: 1.4, duration: 0.8 }}
             />
              <motion.text 
-                x="320" y="145" fontSize="10" fontWeight="bold" fill="#001B3D"
+                x="310" y="145" fontSize="10" fontWeight="bold" fill="#001B3D"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 2.2 }}

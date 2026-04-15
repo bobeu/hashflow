@@ -24,7 +24,8 @@ contract MockZKVerifier is IZKVerifier {
      * @param user   Address to update.
      * @param status New verification status.
      */
-    function setVerificationStatus(address user, bool status) external {
+    function setVerificationStatus(address user, bool status) external returns(bool) {
         verifiedUsers[user] = status;
+        return true;
     }
 }

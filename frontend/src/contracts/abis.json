@@ -368,24 +368,6 @@
       "type": "function"
     },
     {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "_vault",
-          "type": "address"
-        },
-        {
-          "internalType": "uint256",
-          "name": "_amount",
-          "type": "uint256"
-        }
-      ],
-      "name": "approveVault",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
       "inputs": [],
       "name": "autoServiceFeeVault",
       "outputs": [
@@ -1394,6 +1376,11 @@
           "internalType": "address",
           "name": "_owner",
           "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_funder",
+          "type": "address"
         }
       ],
       "stateMutability": "nonpayable",
@@ -1954,6 +1941,32 @@
     },
     {
       "inputs": [],
+      "name": "escrow",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "funder",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
       "name": "getYieldInfo",
       "outputs": [
         {
@@ -1969,6 +1982,11 @@
         {
           "internalType": "uint256",
           "name": "allowance",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "tSupply",
           "type": "uint256"
         }
       ],
@@ -2178,6 +2196,13 @@
       "type": "function"
     },
     {
+      "inputs": [],
+      "name": "pullYieldFromOwner",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
       "inputs": [
         {
           "internalType": "uint256",
@@ -2214,6 +2239,19 @@
       "type": "function"
     },
     {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_escrow",
+          "type": "address"
+        }
+      ],
+      "name": "setEscrow",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
       "inputs": [],
       "name": "symbol",
       "outputs": [
@@ -2232,7 +2270,7 @@
       "outputs": [
         {
           "internalType": "uint256",
-          "name": "",
+          "name": "balance",
           "type": "uint256"
         }
       ],
@@ -2344,6 +2382,13 @@
           "type": "uint256"
         }
       ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "withdrawUnderlyingAsset",
+      "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
     }
@@ -2507,7 +2552,13 @@
         }
       ],
       "name": "setVerificationStatus",
-      "outputs": [],
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
       "stateMutability": "nonpayable",
       "type": "function"
     }

@@ -9,7 +9,7 @@ import abis from './abis.json';
 const addresses = _addresses as Record<string, string>;
 
 // Official HashKey Testnet USDC address (used when MockUSDC_EIP3009 is not deployed)
-const OFFICIAL_USDC = '0x8FE3cB719Ee4410E236Cd6b72ab1fCDC06eF53c6';
+const OFFICIAL_USDC = '0x79AEc4EeA31D50792F61D1Ca0733C18c89524C9e';
 
 export const CONTRACTS = {
   HashFlowEscrow: {

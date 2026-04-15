@@ -261,7 +261,7 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
     }
 
     modifier onlyClient(uint milestoneId) {
-        if (milestoneId >= milestoneCount) revert InvalidMilestoneId();
+        require(milestoneId > 0 && milestoneId <= milestoneCount, "Invalid Id");
         if (_msgSender() != milestones[milestoneId].client) revert NotClient();
         _;
     }
@@ -323,7 +323,6 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
             _r,
             _s
         ) {
-            // transfer succeeded – proceed to create the escrow
         } catch Error(string memory reason) {
             // Bubble up the original require() string from the USDC contract
             revert(string(abi.encodePacked("EIP-3009: ", reason)));
@@ -349,19 +348,18 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
      * @param milestoneId ID of the milestone to release.
      */
     function releaseMilestone(uint256 milestoneId) external onlyClient(milestoneId) nonReentrant {
-        Milestone storage m = milestones[milestoneId];
+        // Milestone storage m = milestones[milestoneId];
         
-        // Ensure the vault is "Liquidity Ready"
-        uint256 requiredAssets = vault.convertToAssets(m.shares);
-        uint256 actualVaultBalance = settlementToken.balanceOf(address(vault));
+        // // Ensure the vault is "Liquidity Ready"
+        // uint256 requiredAssets = vault.convertToAssets(m.shares);
+        // uint256 actualVaultBalance = settlementToken.balanceOf(address(vault));
         
-        if (actualVaultBalance < requiredAssets) {
-            // If the vault is short (due to yield), the Escrow triggers the pull
-            uint256 deficit = requiredAssets - actualVaultBalance;
-            // The Vault must have a function to receive this deficit
-            MockVault(address(vault)).pullYieldFromOwner(deficit);
-        }
+        // if (actualVaultBalance < requiredAssets) {
+        //     // If the vault is short (due to yield), the Escrow triggers the pull
+        //     uint256 deficit = requiredAssets - actualVaultBalance;
+        // }
 
+        MockVault(address(vault)).pullYieldFromOwner();
         _validateAndMarkReleased(milestoneId);
         _distribute(milestoneId);
     }
@@ -516,6 +514,11 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
         Milestone storage m = milestones[_milestoneId];
         uint256 currentAssets = vault.convertToAssets(m.shares);
         yield = currentAssets > m.amount ? currentAssets - m.amount : 0;
+
+        if(yield == 0) {
+            (,uint256 expectedGrowth,,) = MockVault(address(vault)).getYieldInfo();
+            yield = expectedGrowth;
+        }
     }
 
     /**
@@ -591,7 +594,7 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
      */
     function _validateAndMarkReleased(uint256 _milestoneId) internal {
         Milestone storage m = milestones[_milestoneId];
-        if (m.isReleased) revert AlreadyReleased();
+        require(!m.isReleased, "AlreadyReleased");
         m.isReleased = true;
     }
 

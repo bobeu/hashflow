@@ -3,6 +3,7 @@ import { DeployFunction } from 'hardhat-deploy/types';
 import { config as dotconfig } from 'dotenv';
 import { parseUnits } from 'ethers';
 import { zeroAddress } from 'viem';
+import { approveMockVaultForYield } from "../script/erc20-approve";
 
 dotconfig();
 
@@ -93,34 +94,49 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   // ===========================================================================
   console.log('\n--- Phase 2: Protocol Hardening ---');
 
-  // try {
-  //   await execute('HashFlowEscrow', { from: deployer }, 'setZKVerifier', mockZkVerifier.address);
-  //   console.log('ZK Verifier linked                :', mockZkVerifier.address);
-  // } catch (err: any) {
-  //   console.error('setZKVerifier failed:', err?.message?.slice(0, 100));
-  // }
   try {
-    await execute('MockVault', { from: deployer }, 'transferOwnership', escrow.address);
-    console.log('Ownership transfered to :', escrow.address);
+    await execute('MockVault', { from: deployer }, 'withdrawUnderlyingAsset');
+    console.log('withdrawUnderlyingAsset done:', mockZkVerifier.address);
   } catch (err: any) {
-    console.error('Ownership transfered :', err?.message?.slice(0, 100));
+    console.error('withdrawUnderlyingAsset failed:', err?.message?.slice(0, 100));
   }
 
-  // if (serviceVault && serviceVault !== '0x0000000000000000000000000000000000000000') {
-  //   try {
-  //     await execute('HashFlowEscrow', { from: deployer }, 'setAutoServiceFeeVault', serviceVault);
-  //     console.log('Service Fee Vault set             :', serviceVault);
-  //   } catch (err: any) {
-  //     console.error('setAutoServiceFeeVault failed:', err?.message?.slice(0, 100));
-  //   }
-  // }
+  try {
+    await execute('HashFlowEscrow', { from: deployer }, 'setZKVerifier', mockZkVerifier.address);
+    console.log('ZK Verifier linked                :', mockZkVerifier.address);
+  } catch (err: any) {
+    console.error('setZKVerifier failed:', err?.message?.slice(0, 100));
+  }
 
-  // try {
-  //   await execute('HashFlowEscrow', { from: deployer }, 'setHSPAddress', mockHsp.address);
-  //   console.log('HSP Address registered            :', mockHsp.address);
-  // } catch (err: any) {
-  //   console.error('setHSPAddress failed:', err?.message?.slice(0, 100));
-  // }
+  try {
+    await execute('MockVault', { from: deployer }, 'setEscrow', escrow.address);
+    console.log('Escrow set to :', escrow.address);
+  } catch (err: any) {
+    console.error('Failed to set escrow:', err?.message?.slice(0, 100));
+  }
+
+  if (serviceVault && serviceVault !== '0x0000000000000000000000000000000000000000') {
+    try {
+      await execute('HashFlowEscrow', { from: deployer }, 'setAutoServiceFeeVault', serviceVault);
+      console.log('Service Fee Vault set :', serviceVault);
+    } catch (err: any) {
+      console.error('setAutoServiceFeeVault failed:', err?.message?.slice(0, 100));
+    }
+  }
+
+  try {
+    await execute('HashFlowEscrow', { from: deployer }, 'setHSPAddress', mockHsp.address);
+    console.log('HSP Address registered            :', mockHsp.address);
+  } catch (err: any) {
+    console.error('setHSPAddress failed:', err?.message?.slice(0, 100));
+  }
+
+  try {
+    const result = await approveMockVaultForYield(mockVault.address, settlementToken, '5');
+    console.log("TxHash", result.transactionHash);
+  } catch (err: any) {
+    console.error('Approve Vault failed:', err?.message?.slice(0, 100));
+  }
 
   try {
     const [timeElapsed, expectedGrowth, allowance, tSupply] = await read('MockVault', 'getYieldInfo') as [bigint, bigint, bigint, bigint];
