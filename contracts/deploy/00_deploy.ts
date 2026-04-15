@@ -52,19 +52,58 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   }
 
   // ERC-4626 yield vault (MockVault — constructor: asset, owner)
-const mockVault = await deploy('MockVault', {
+  const mockVault = await deploy('MockVault', {
     from: deployer,
     args: [settlementToken, deployer, deployer],
     log: true,
   });
   console.log('MockVault deployed :', mockVault.address);
 
-  // Deployer grants spending allowance to MockVault on the settlement token (ERC20 approval)
+  // Core escrow — HSP address starts as zero; wired in Phase 2
+  const escrow = await deploy('HashFlowEscrow', {
+    from: deployer,
+    args: [
+      settlementToken,
+      mockVault.address,
+      zeroAddress, // HSP set in Phase 2
+      deployer,                                      // owner (platform)
+    ],
+    log: true,
+  });
+  console.log('HashFlowEscrow deployed           :', escrow.address);
+
+  // MockHSP — institutional entry point (constructor: token, escrow)
+  const mockHsp = await deploy('MockHSP', {
+    from: deployer,
+    args: [settlementToken, escrow.address],
+    log: true,
+  });
+  console.log('MockHSP deployed                  :', mockHsp.address);
+
+  // MockZKVerifier — compliance gate
+  const mockZkVerifier = await deploy('MockZKVerifier', {
+    from: deployer,
+    args: [],
+    log: true,
+  });
+  console.log('MockZKVerifier deployed           :', mockZkVerifier.address);
+
+  // ===========================================================================
+  // PHASE 2: PROTOCOL HARDENING (owner calls)
+  // ===========================================================================
+  console.log('\n--- Phase 2: Protocol Hardening ---');
+
+  // try {
+  //   await execute('HashFlowEscrow', { from: deployer }, 'setZKVerifier', mockZkVerifier.address);
+  //   console.log('ZK Verifier linked                :', mockZkVerifier.address);
+  // } catch (err: any) {
+  //   console.error('setZKVerifier failed:', err?.message?.slice(0, 100));
+  // }
   try {
-    await execute(settlementToken, { from: deployer }, 'approve', mockVault.address, parseUnits('10000000', 6));
-    console.log('Deployer approved MockVault (ERC20) :', mockVault.address);
+    await execute('MockVault', { from: deployer }, 'transferOwnership', escrow.address);
+    console.log('Ownership transfered to :', escrow.address);
   } catch (err: any) {
-    console.error('Deployer ERC20 approve failed:', err?.message?.slice(0, 100));
+    console.error('Ownership transfered :', err?.message?.slice(0, 100));
   }
 
   // if (serviceVault && serviceVault !== '0x0000000000000000000000000000000000000000') {
@@ -87,7 +126,7 @@ const mockVault = await deploy('MockVault', {
     const [timeElapsed, expectedGrowth, allowance, tSupply] = await read('MockVault', 'getYieldInfo') as [bigint, bigint, bigint, bigint];
     console.log('timeElapsed:', timeElapsed.toString(), 'expectedGrowth:', expectedGrowth.toString(), 'allowance:', allowance.toString(), "tSupply:", tSupply.toString());
   } catch (err: any) {
-    console.error('getYieldInfo failed:', err?.message?.slice(0, 100));
+    console.error('approveVault failed:', err?.message?.slice(0, 100));
   }
 
   // ===========================================================================

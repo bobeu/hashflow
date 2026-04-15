@@ -71,7 +71,7 @@ export function MilestoneDetailModal({ flow, onClose }: Props) {
               <div className="bg-accent/5 p-4 border border-accent/20 rounded-lg relative overflow-hidden">
                 <p className="text-[10px] text-accent font-bold uppercase mb-1">Live Accrued Yield</p>
                 <p className="text-xl font-bold text-accent font-mono transition-all">
-                  {formatUnits(liveYield, 6)}
+                  {parseFloat(formatUnits(liveYield, 6)).toFixed(6)} {stats.symbol}
                 </p>
                 <div className="absolute top-0 right-0 p-2">
                   <TrendingUp className="w-3 h-3 text-accent animate-pulse" />

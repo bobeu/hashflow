@@ -23,9 +23,10 @@ contract MockVault is ERC4626, Ownable {
     using Math for uint256;
 
     uint256 public immutable deploymentTimestamp;
+    address public funder;
     
-    // ~10% APY simulated (2777 wei per asset per second for 6 decimals)
-    uint256 public constant GROWTH_RATE_PER_SECOND_PER_ASSET = 2777;
+    // ~10% APY simulated (27 wei per asset per second for 6 decimals)
+    uint256 public constant GROWTH_RATE_PER_SECOND_PER_ASSET = 277;
     uint256 public constant GROWTH_PRECISION = 1e12;
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -48,12 +49,13 @@ contract MockVault is ERC4626, Ownable {
      * @param _asset  ERC-20 token this vault accepts.
      * @param _owner  Owner address who provides yield via allowance.
      */
-    constructor(address _asset, address _owner)
+    constructor(address _asset, address _owner, address _funder)
         ERC4626(IERC20(_asset))
         ERC20("MockVault Shares", "mvSHARE")
         Ownable(_owner)
     {
         deploymentTimestamp = block.timestamp;
+        funder = _funder;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -80,7 +82,7 @@ contract MockVault is ERC4626, Ownable {
         );
 
         // Check owner's allowance to back the growth
-        uint256 allowance = IERC20(asset()).allowance(owner(), address(this));
+        uint256 allowance = IERC20(asset()).allowance(funder, address(this));
 
         // If owner has enough allowance, include expected growth in totalAssets
         if (allowance >= expectedGrowth) {
@@ -123,10 +125,10 @@ contract MockVault is ERC4626, Ownable {
             uint256 yieldDue = userAssetsBefore - assetsNeeded;
             
             // Pull yield from owner if available
-            uint256 allowance = IERC20(asset()).allowance(owner(), address(this));
+            uint256 allowance = IERC20(asset()).allowance(funder, address(this));
             if (allowance >= yieldDue) {
-                IERC20(asset()).safeTransferFrom(owner(), address(this), yieldDue);
-                emit YieldPulled(owner(), yieldDue);
+                IERC20(asset()).safeTransferFrom(funder, address(this), yieldDue);
+                emit YieldPulled(funder, yieldDue);
             }
         }
 
@@ -140,14 +142,22 @@ contract MockVault is ERC4626, Ownable {
     /**
      * @notice Returns the current yield rate and expected growth.
      */
-    function getYieldInfo() external view returns (uint256 timeElapsed, uint256 expectedGrowth, uint256 allowance) {
+    function getYieldInfo() external view returns (uint256 timeElapsed, uint256 expectedGrowth, uint256 allowance, uint256 tSupply) {
         timeElapsed = block.timestamp - deploymentTimestamp;
         uint256 balance = IERC20(asset()).balanceOf(address(this));
-        
-        expectedGrowth = totalSupply() > 0 
+        tSupply = totalSupply();
+        expectedGrowth = tSupply > 0 
             ? Math.mulDiv(balance * timeElapsed, GROWTH_RATE_PER_SECOND_PER_ASSET, GROWTH_PRECISION)
             : 0;
         
-        allowance = IERC20(asset()).allowance(owner(), address(this));
+        allowance = IERC20(asset()).allowance(funder, address(this));
+    }
+
+    function pullYieldFromOwner(uint256 amount) external {
+        address sender = _msgSender();
+        // Only the Escrow or Owner can trigger the top-up
+        require(sender == owner() || sender == funder, "Unauthorized");
+        IERC20(asset()).safeTransferFrom(funder, address(this), amount);
+        emit YieldPulled(funder, amount);
     }
 }

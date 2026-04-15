@@ -2662,3 +2662,21 @@ Imagine you have a lock (the USDC contract). You made a key (the signature) base
    - Version remains `'2'` for official USDC, `'1'` for mock
 
 **Status**: Committed and pushed to https://github.com/bobeu/hashflow
+
+------------------------------------------------------------
+
+### Implementation Summary (Kilo - ERC20 Approval Script)
+
+**Task**: Create a reusable script for ERC20 approval using deployer's private key
+
+**Created**: `contracts/script/erc20-approve.ts`
+
+**Features:**
+- Uses `viem` to import ERC20 ABI
+- Uses `privateKeyToAccount` from `viem/accounts` to get the deployer from `P_KEY_0xD7c`
+- Exports `erc20Approve()` function with params: tokenAddress, spender, amount, decimals, rpcUrl
+- Exports `approveMockVaultForYield()` convenience function for the yield engine
+- Can be imported and called from `00_deploy.ts` or used independently
+
+**Commit**: Pushed to https://github.com/bobeu/hashflow
+

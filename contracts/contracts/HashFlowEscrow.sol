@@ -8,6 +8,7 @@ import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.s
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { IZKVerifier } from "./interfaces/IZKVerifier.sol";
 import { IHashFlowEscrow } from "./interfaces/IHashFlowEscrow.sol";
+import { MockVault } from "./MockVault.sol";
 
 interface IERC3009 {
     function transferWithAuthorization(
@@ -348,6 +349,19 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
      * @param milestoneId ID of the milestone to release.
      */
     function releaseMilestone(uint256 milestoneId) external onlyClient(milestoneId) nonReentrant {
+        Milestone storage m = milestones[milestoneId];
+        
+        // Ensure the vault is "Liquidity Ready"
+        uint256 requiredAssets = vault.convertToAssets(m.shares);
+        uint256 actualVaultBalance = settlementToken.balanceOf(address(vault));
+        
+        if (actualVaultBalance < requiredAssets) {
+            // If the vault is short (due to yield), the Escrow triggers the pull
+            uint256 deficit = requiredAssets - actualVaultBalance;
+            // The Vault must have a function to receive this deficit
+            MockVault(address(vault)).pullYieldFromOwner(deficit);
+        }
+
         _validateAndMarkReleased(milestoneId);
         _distribute(milestoneId);
     }
@@ -445,18 +459,6 @@ contract HashFlowEscrow is IHashFlowEscrow, ReentrancyGuard, Ownable {
     function setAutoServiceFeeVault(address _serviceVault) external onlyOwner {
         if (_serviceVault == address(0)) revert ZeroAddress();
         autoServiceFeeVault = _serviceVault;
-    }
-
-    /**
-     * @notice Approves the vault to pull yield from the owner for yield distribution.
-     * @param _vault   Address of the ERC-4626 vault.
-     * @param _amount  Allowance amount for the vault to pull.
-     */
-    function approveVault(address _vault, uint256 _amount) external onlyOwner {
-        if (_vault == address(0)) revert ZeroAddress();
-        IERC20(settlementToken).approve(_vault, _amount);
-        
-        emit VaultApproved(_vault, _amount);
     }
 
     /**

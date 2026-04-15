@@ -112,8 +112,7 @@ interface IHashFlowEscrow {
 
     /**
      * @notice Approves the vault to pull yield from the owner for yield distribution.
-     * @param _vault   Address of the ERC-4626 vault.
      * @param _amount  Allowance amount for the vault to pull.
      */
-    function approveVault(address _vault, uint256 _amount) external;
+    function approveVault(uint256 _amount) external;
 }
