@@ -6,7 +6,7 @@ HashFlow is a high-performance settlement layer built natively for the **HashKey
 
 ---
 
-## 🚀 The Triple-Track Advantage
+## The Triple-Track Advantage
 HashFlow is architected to unify three critical sectors of the Web3 economy:
 
 ### 1. PayFi (HashKey Settlement Protocol)
@@ -23,7 +23,7 @@ Settlements are gated by **ZK-Identity verification**. By integrating with the *
 
 ---
 
-## 🏗️ Technical Architecture & Breakthroughs
+## Technical Architecture & Breakthroughs
 
 ### **Multitenant Singleton Model**
 HashFlow rejects the inefficient "one-contract-per-user" design in favor of a high-performance **Singleton Architecture**.
@@ -38,7 +38,7 @@ HashFlow is designed for a fragmented regulatory landscape. Every milestone can 
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ### **`/contracts` (The Settlement Engine)**
 * **`HashFlowEscrow.sol`**: The core logic handling EIP-3009 authorizations, ERC-4626 staking, and tax shredding.
@@ -52,11 +52,13 @@ HashFlow is designed for a fragmented regulatory landscape. Every milestone can 
 
 ---
 
-## ⚖️ Judge's Verification Guide
+## Judge's Verification Guide
 
 ### **Live Environment Settings**
 * **Network**: HashKey Chain Testnet (Chain ID: 133)
 * **Settlement Token**: Official HashKey USDC (`0x8FE3cB719Ee4410E236Cd6b72ab1fCDC06eF53c6`)
+* **HashFlowEscrow**: `0xB3a66718355Bc95Ff8Fb96e70AAd649487D51A5d`
+* **HMockVault**: `0x60D83f53792f084333FD9D915300f2fbAa906Ed0`
 
 ### **Execution Commands**
 ```bash
@@ -76,48 +78,3 @@ cd frontend && bun install && bun run dev
 
 **Built with Precision for the HashKey Ecosystem.**
 *Isaac J | Full-Stack Web3 Developer & Co-Founder*
-
-
-<!-- 
-
-
-
-
-
-
-
-
-
-**Vision**
-To establish the regulatory-clean settlement layer for the HashKey ecosystem, transforming idle escrow capital into productive, yield-bearing assets that automate compliance without sacrificing liquidity.
-
-**Problem Solved**
-* **Capital Stagnation:** Traditional escrows lock funds in non-productive accounts; HashFlow keeps capital active via ERC-4626 yield vaults.
-* **Compliance Complexity:** Merchants struggle with manual tax remittance; our "Jurisdictional Shredder" automates 100% of tax distributions on-chain.
-* **Technical Friction:** High gas and complex flows deter institutions; HashFlow enables a "One-Click" gasless experience via EIP-3009.
-
-
-The vision for Hashflow is focused on bridging the gap between traditional finance and decentralized finance (DeFi) by creating an "institutional-grade", "regulatory-compliant settlement engine". 
-
-Operating primarily as a multi-chain decentralized exchange (DEX), Hashflow's broader vision encompasses several key pillars:
-
-1. Institutional-Grade PayFi and Settlement
-Hashflow aims to redefine the future of transactions by merging decentralized finance with the immediacy of modern payment systems (PayFi). Its vision includes:
-- Capital Efficiency: Transforming static settlement capital—which often sits idle in traditional escrow accounts — into productive, yield-bearing assets.
-- Regulatory Clean Framework: Providing a "Regulatory-Clean" infrastructure that automates tax withholding and remittance while maintaining 100% precision for jurisdictional requirements.
-- HSP Integration: Leveraging the "HashKey Settlement Protocol (HSP)" to support high-volume, regulated payment batches on the HashKey Chain.
-
-2. "Provable and Transparent Exchanges"
-With the launch of "Exchange OS (xOS)", Hashflow envisions a universal zero-knowledge (ZK) settlement layer that makes any exchange "provable". This vision addresses central risks in current exchange designs by:
-- Separating Settlement from Service: Decoupling the settlement layer allows for independent verification of key operations, helping to prevent platform failures.
-- User Sovereignty: Giving users total control over their assets, allowing them to onboard or exit exchanges on-chain without needing permission from the platform operator.
-
-3. The "Shadow Spread" Revenue Model
-Hashflow's vision for sustainable protocol growth relies on a DeFi-native monetization strategy called the "Shadow Spread" model. Unlike traditional platforms that deduct fees from the principal payout, Hashflow aims to:
-* **Protect Principal Integrity:** Ensure 100% of the principal reaches the worker and tax authority.
-* **Yield-Based Monetization:** Generate revenue exclusively from the interest accrued in **ERC-4626** compliant vaults during the settlement period.
-
-### 4. **Seamless, Gasless User Experience**
-Hashflow seeks to remove the technical barriers of DeFi for institutional and retail users alike. This includes providing:
-* **Gasless Swaps:** Using meta-transactions so market makers can bundle gas fees into quotes, simplifying the trading experience.
-* **One-Click Payments:** Implementing **EIP-3009** (Transfer with Authorization) to enable familiar, low-friction settlement flows. -->
