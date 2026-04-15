@@ -78,7 +78,7 @@ cd frontend && bun install && bun run dev
 *Isaac J | Full-Stack Web3 Developer & Co-Founder*
 
 
-
+<!-- 
 
 
 
@@ -120,4 +120,4 @@ Hashflow's vision for sustainable protocol growth relies on a DeFi-native moneti
 ### 4. **Seamless, Gasless User Experience**
 Hashflow seeks to remove the technical barriers of DeFi for institutional and retail users alike. This includes providing:
 * **Gasless Swaps:** Using meta-transactions so market makers can bundle gas fees into quotes, simplifying the trading experience.
-* **One-Click Payments:** Implementing **EIP-3009** (Transfer with Authorization) to enable familiar, low-friction settlement flows.
+* **One-Click Payments:** Implementing **EIP-3009** (Transfer with Authorization) to enable familiar, low-friction settlement flows. -->
