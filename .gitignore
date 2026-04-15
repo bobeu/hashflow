@@ -20,3 +20,5 @@ Thumbs.db
 
 # ── CTO rule: DOCUMENT.md must not be committed ──────────────────────────────
 DOCUMENT.md
+trash.md
+HASHKEY_SCRAPED.md

@@ -110,7 +110,7 @@ contract MockVault is ERC4626, Ownable {
     function _withdraw(
         address assets,
         address receiver,
-        address owner,
+        address _owner,
         uint256 shares,
         uint256 assetsNeeded
     ) internal override {
@@ -125,15 +125,12 @@ contract MockVault is ERC4626, Ownable {
             // Pull yield from owner if available
             uint256 allowance = IERC20(asset()).allowance(owner(), address(this));
             if (allowance >= yieldDue) {
-                try IERC20(asset()).safeTransferFrom(owner(), address(this), yieldDue) {
-                    emit YieldPulled(owner(), yieldDue);
-                } catch {
-                    // If pull fails, continue with actual balance
-                }
+                IERC20(asset()).safeTransferFrom(owner(), address(this), yieldDue);
+                emit YieldPulled(owner(), yieldDue);
             }
         }
 
-        super._withdraw(assets, receiver, owner, shares, assetsNeeded);
+        super._withdraw(assets, receiver, _owner, shares, assetsNeeded);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

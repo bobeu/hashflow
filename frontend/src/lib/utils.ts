@@ -5,6 +5,8 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+const OFFICIAL_USDC_ADDRESS = '0x8FE3cB719Ee4410E236Cd6b72ab1fCDC06eF53c6';
+export const getOfficialUSDCAddress = () => OFFICIAL_USDC_ADDRESS.toLowerCase();
 
 export interface MilestoneFlow {
   id: number;

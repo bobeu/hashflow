@@ -15,7 +15,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   // Pull named accounts defined in hardhat.config.ts
   const { deployer, demoWorker, demoMerchant, serviceVault, OFFICIAL_USDC_ADDRESS } = await getNamedAccounts();
 
-  const useOfficialUSDC = false;
+  const useOfficialUSDC = true;
   const chainId = await getChainId();
   const isHashKeyTestnet = chainId === HASHKEY_TESTNET_CHAIN_ID;
 
@@ -122,6 +122,8 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     // Approve maximum possible for yield pull (10M USDC should be enough for demo)
     await execute('HashFlowEscrow', { from: deployer }, 'approveVault', mockVault.address, parseUnits('10', 6));
     console.log('Vault approved for yield pull :', mockVault.address);
+    const [timeElapsed, expectedGrowth, allowance] = await read('MockVault', 'getYieldInfo') as [bigint, bigint, bigint];
+    console.log('timeElapsed:', timeElapsed.toString(), 'expectedGrowth:', expectedGrowth.toString(), 'allowance:', allowance.toString());
   } catch (err: any) {
     console.error('approveVault failed:', err?.message?.slice(0, 100));
   }

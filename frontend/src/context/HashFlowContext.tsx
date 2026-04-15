@@ -8,7 +8,7 @@ import { formatUnits, parseUnits, Hex, isAddress, type Address } from 'viem';
 import { toast } from 'sonner';
 // import { JURISDICTIONS } from '@/components/dashboard/jurisdiction-selector';
 import { TransactionStage } from '@/components/TransactionModal';
-import { MilestoneFlow, MOCK_FLOWS } from '@/lib/utils';
+import { getOfficialUSDCAddress, MilestoneFlow, MOCK_FLOWS } from '@/lib/utils';
 
 interface HashFlowContextType {
   // Data
@@ -73,7 +73,8 @@ export function HashFlowProvider({ children }: { children: React.ReactNode }) {
       { address: CONTRACTS.MockERC20.address, abi: CONTRACTS.MockERC20.abi as any, functionName: 'symbol' },
       { address: CONTRACTS.MockERC20.address, abi: CONTRACTS.MockERC20.abi as any, functionName: 'decimals' },
       { address: CONTRACTS.MockERC20.address, abi: CONTRACTS.MockERC20.abi as any, functionName: 'balanceOf', args: [address as Address] },
-      { address: CONTRACTS.HashFlowEscrow.address, abi: CONTRACTS.HashFlowEscrow.abi as any, functionName: 'getTotalTaxLiability', args: [address as Address] }
+      { address: CONTRACTS.HashFlowEscrow.address, abi: CONTRACTS.HashFlowEscrow.abi as any, functionName: 'getTotalTaxLiability', args: [address as Address] },
+      { address: CONTRACTS.MockERC20.address, abi: CONTRACTS.MockERC20.abi as any, functionName: 'name' }
     ],
     query: { enabled: !!address }
   });
@@ -98,13 +99,16 @@ export function HashFlowProvider({ children }: { children: React.ReactNode }) {
   });
 
   // Derived Token Meta
-  const { symbol, decimals, balance, officialTaxLiability } = useMemo(() => {
+  const { symbol, decimals, tokenName, balance, officialTaxLiability } = useMemo(() => {
     const symbol = meta?.[0]?.result as string || 'USDC';
     const decimals = meta?.[1]?.result as number || 6;
     const balance = meta?.[2]?.result as bigint || 0n;
     const taxLiab = meta?.[3]?.result as bigint || 0n;
-    return { symbol, decimals, balance: formatUnits(balance, decimals), officialTaxLiability: taxLiab };
+    const tokenName = meta?.[4]?.result as string || 'NA';
+    return { symbol, decimals, tokenName, balance: formatUnits(balance, decimals), officialTaxLiability: taxLiab };
   }, [meta]);
+
+  console.log("TokenName", tokenName);
 
   // Derived Processed Flows
   const milestones = useMemo(() => {
@@ -218,13 +222,14 @@ export function HashFlowProvider({ children }: { children: React.ReactNode }) {
           const validBefore = BigInt(Math.floor(Date.now() / 1000) + 3600);
           const nonce = `0x${Date.now().toString(16).padStart(64, '0')}` as Hex;
           const resolvedChainId = chainId ?? 133;
-
-          const isOfficial = CONTRACTS.MockERC20.address.toLowerCase() === '0x79aec4eea31d50792f61d1ca0733c18c89524c9e';
+          
+          const officialUSDCAddress = getOfficialUSDCAddress();
+          const isOfficial = CONTRACTS.MockERC20.address.toLowerCase() === officialUSDCAddress;
           const domain = {
-            name: isOfficial ? 'USDC' : 'Mock USDC',
+            name: isOfficial ? 'USD Coin' : 'Mock USDC',
             version: isOfficial ? '2' : '1',
             chainId: resolvedChainId,
-            verifyingContract: CONTRACTS.MockERC20.address as Hex
+            verifyingContract: isOfficial ? officialUSDCAddress as Hex : CONTRACTS.MockERC20.address as Hex
           };
 
           const signature = await signTypedDataAsync({

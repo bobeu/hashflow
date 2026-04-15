@@ -2593,3 +2593,72 @@ Imagine you are a bank. I deposit $100. The bank doesn't "make" money out of thi
 | **Allowance Depletion** | If you run out of USDC or allowance, yield returns to 0. | CTO should ensure to call `usdc.approve(MockVault, 1000000 * 10**6)` immediately after deployment. |
 | **Floating Point Precision** | Using `1e12` for growth can cause rounding errors. | Kilo must use `Math.mulDiv` for all yield calculations. |
 | **The "Double Pull"** | Standard `ERC4626` might try to transfer tokens it doesn't have. | The `safeTransferFrom` **must** happen *before* the `_burn` in the `redeem` flow. |
+
+----------------------------------------------------------------------------
+
+### CTO Said
+
+**Issue reported by user:**
+We are getting `invalid signature` error during smart contract interaction
+
+As your CTO, I’ve audited the official USDC (FiatToken V2.2) source code  provided at `trash.md` against our implementation. I found the "smoking gun." The `invalid signature` error is happening because the official USDC contract uses a different **Domain Version** and **Domain Separator** logic than our mock.
+
+Here are the three critical discrepancies we must fix to align with the official HashKey Testnet USDC (`0x8FE...`).
+
+### **1. The "Version" Mismatch (Critical)**
+In our `MockUSDC_EIP3009.sol`, we used version `"1"`. However, the official Circle/USDC contract explicitly uses version **`"2"`** for its EIP-712 domain.
+
+* **Discrepancy**: The frontend is currently signing for version `"1"`.
+* **The Fix**: In `handleCreateEscrow` (frontend), update the domain object immediately:
+    ```javascript
+    const domain = {
+      name: 'USD Coin', // Note: Official name is usually 'USD Coin', check the contract!
+      version: '2',     // Must be "2" for FiatTokenV2.2
+      chainId: 133, 
+      verifyingContract: '0x8FE3cB719Ee4410E236Cd6b72ab1fCDC06eF53c6'
+    };
+    ```
+
+### **2. The Token Name**
+While we used `"Mock USDC"`, the official contract usually initializes with **`"USD Coin"`**. If the name string in your EIP-712 signature doesn't match the string stored in the `name` variable of the `0x8FE3cB719Ee4410E236Cd6b72ab1fCDC06eF53c6` contract byte-for-byte, the signature will revert.
+
+* **Action**: Use `cast call 0x8FE3cB719Ee4410E236Cd6b72ab1fCDC06eF53c6 "name()(string)"` in your terminal to get the exact string. It is likely `"USD Coin"`.
+
+### **3. The Salt/ChainID Assembly**
+The official code provided in `trash.md` uses a custom `_chainId()` helper that pulls the ID via inline assembly to ensure it's always accurate to the current fork. 
+
+* **CTO Insight**: This confirms that the `chainId` **133** must be passed as a **plain number** in our signature, just as we discussed. If there’s any mismatch in how the HashKey Chain reports its ID to your wallet versus what the contract sees via assembly, it will fail.
+
+---
+
+### **CTO’S DIRECTIVE**
+
+**"Antigravity, align our EIP-3009 signatures with Circle's FiatTokenV2.2 specs:"**
+
+1.  **Update Domain Version**: Change the `version` from `'1'` to `'2'` in `page.tsx`.
+2.  **Verify Token Name**: Check the actual `name()` on the official `0x8FE3cB719Ee4410E236Cd6b72ab1fCDC06eF53c6` contract. If it is `"USD Coin"`, update the frontend domain name accordingly.
+3.  **Signature Packing**: The official contract mentions signatures can be packed or split. Our `v, r, s` split is correct for the `transferWithAuthorization` function we are calling. 
+4.  **Salt Verification**: Ensure the `chainId` is exactly `133`.
+
+---
+
+### **Layman's Summary: The "Wrong Key" Problem**
+Imagine you have a lock (the USDC contract). You made a key (the signature) based on a manual that said "Version 1." But the lock was actually upgraded to "Version 2." Even if the cuts on the key are perfect, the lock won't turn because the "Version" stamp doesn't match. We are just updating your "Key Manual" to **Version 2**.
+
+
+**Try changing the version to `"2"` and the name to `"USD Coin"` on the frontend.** This should clear the `Invalid signature` error and allow the 500 USDC the HashKey team sent to users to flow through the escrow!
+
+---
+
+### Implementation Summary (Kilo - Line 2599 CTO Directive)
+
+**Task**: Fix EIP-3009 signature to match official HashKey USDC (FiatTokenV2.2)
+
+**Changes Made:**
+
+1. **HashFlowContext.tsx** - Updated EIP-3009 domain configuration:
+   - Changed token name from `'USDC Coin'` to `'USD Coin'` for official USDC
+   - Set `verifyingContract` to use official USDC address when connected to official token
+   - Version remains `'2'` for official USDC, `'1'` for mock
+
+**Status**: Committed and pushed to https://github.com/bobeu/hashflow

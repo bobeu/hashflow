@@ -25,6 +25,9 @@ const DEPLOYMENTS_ROOT = path.join(__dirname, '../contracts/deployments');
 // Network priority order — first directory that exists wins
 const NETWORK_PRIORITY = ['testnet', 'mainnet', 'hardhat', 'localhost'];
 
+const useLiveToken = true;
+const OFFICIAL_USDC_ADDRESS = '0x8FE3cB719Ee4410E236Cd6b72ab1fCDC06eF53c6';
+
 // Contracts we care about syncing
 const CONTRACTS_TO_SYNC = [
   'HashFlowEscrow',
@@ -89,7 +92,7 @@ function sync() {
     const filePath = path.join(networkDir, `${name}.json`);
     if (fs.existsSync(filePath)) {
       const data       = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-      addresses[name]  = data.address;
+      addresses[name]  = (name.endsWith('3009') && useLiveToken)? OFFICIAL_USDC_ADDRESS : data.address;;
       abis[name]       = data.abi;
       console.log(`  Synced ${name} @ ${data.address}`);
     } else {
